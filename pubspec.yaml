@@ -1,0 +1,46 @@
+name: mini_foot_owner_flutter
+description: "MiniFoot Owner — App de gestion pour propriétaires de terrains"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.3
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  get: ^4.6.6
+  lottie: ^3.1.0
+  fl_chart: ^0.69.0
+  table_calendar: ^3.1.2
+  image_picker: ^1.1.2
+  cached_network_image: ^3.4.1
+  shimmer: ^3.0.0
+  flutter_animate: ^4.5.0
+  dotted_border: ^2.1.0
+  percent_indicator: ^4.2.3
+  google_fonts: ^6.2.1
+  phosphor_flutter: ^2.1.0
+  smooth_page_indicator: ^1.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/fonts/
+    - assets/lottie/
+
+  fonts:
+    - family: Orbitron
+      fonts:
+        - asset: assets/fonts/Orbitron-Variable.ttf
+    - family: DMSans
+      fonts:
+        - asset: assets/fonts/DMSans-Variable.ttf
