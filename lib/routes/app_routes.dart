@@ -4,6 +4,7 @@ import '../features/auth/screens/splash_screen.dart';
 import '../features/auth/screens/onboarding_screen.dart';
 import '../features/auth/screens/login_screen.dart';
 import '../features/auth/screens/register_screen.dart';
+import '../features/auth/screens/otp_screen.dart';
 import '../features/dashboard/bindings/dashboard_binding.dart';
 import '../features/dashboard/screens/dashboard_screen.dart';
 import '../features/terrain/bindings/terrain_binding.dart';
@@ -28,6 +29,7 @@ abstract class Routes {
   static const onboarding   = '/onboarding';
   static const login        = '/login';
   static const register     = '/register';
+  static const otp          = '/otp';
   static const dashboard    = '/dashboard';
   static const terrainList  = '/terrains';
   static const terrainForm  = '/terrains/form';
@@ -67,6 +69,13 @@ final appPages = [
   GetPage(
     name: Routes.register,
     page: () => const RegisterScreen(),
+    binding: AuthBinding(),
+    transition: Transition.rightToLeftWithFade,
+    transitionDuration: const Duration(milliseconds: 350),
+  ),
+  GetPage(
+    name: Routes.otp,
+    page: () => OtpScreen(phone: Get.arguments as String? ?? ''),
     binding: AuthBinding(),
     transition: Transition.rightToLeftWithFade,
     transitionDuration: const Duration(milliseconds: 350),

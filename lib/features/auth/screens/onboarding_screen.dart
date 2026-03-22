@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
-import 'package:lottie/lottie.dart';
-import 'package:smooth_page_indicator/smooth_page_indicator.dart';
-import '../../../core/theme/app_theme.dart';
 import '../../../routes/app_routes.dart';
+
+const Color kGreen = Color(0xFF006F39);
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -14,355 +12,325 @@ class OnboardingScreen extends StatefulWidget {
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
-  final _ctrl = PageController();
-  int _page = 0;
+  final PageController _controller = PageController();
+  int _currentPage = 0;
+  double _pageOffset = 0;
 
-  static const _slides = [
-    _Slide(
-      imagePath: 'assets/images/terrain.webp',
-      title: 'Gérez vos terrains',
+  final List<_OnboardingData> _pages = const [
+    // Slide 1 — même photo terrain que minifoot_mobile slide 1
+    _OnboardingData(
+      imageUrl:
+          'https://images.pexels.com/photos/12486370/pexels-photo-12486370.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+      fallbackAsset: 'assets/images/terrain.webp',
+      title: 'Gérez vos\nterrains',
       subtitle:
-          'Ajoutez et configurez vos terrains de foot en quelques clics. Horaires, tarifs, réservations — tout est centralisé.',
-      imageType: _ImageType.terrain,
+          'Ajoutez vos terrains, configurez les créneaux et les tarifs. Tout est centralisé en un seul endroit.',
     ),
-    _Slide(
-      imagePath: 'assets/images/minifoot.png',
-      title: 'Suivez vos revenus',
+    // Slide 2 — photo joueurs / match (minifoot_mobile slide 2)
+    _OnboardingData(
+      imageUrl:
+          'https://images.pexels.com/photos/1884574/pexels-photo-1884574.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+      fallbackAsset: 'assets/images/ballon.png',
+      title: 'Suivez vos\nrevenus',
       subtitle:
-          'Visualisez vos performances financières en temps réel avec des statistiques claires et détaillées.',
-      imageType: _ImageType.logo,
+          'Visualisez vos performances financières en temps réel. Paiements, réservations, statistiques — tout est clair.',
     ),
-    _Slide(
-      imagePath: 'assets/images/ballon.png',
-      title: 'Tout au même endroit',
+    // Slide 3 — même photo match que minifoot_mobile slide 3
+    _OnboardingData(
+      imageUrl:
+          'https://images.pexels.com/photos/3148452/pexels-photo-3148452.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+      fallbackAsset: 'assets/images/minifoot.png',
+      title: 'Organisez des\ntournois',
       subtitle:
-          'Une plateforme unique pour gérer vos terrains, réservations, paiements et communications.',
-      imageType: _ImageType.ball,
+          'Créez et gérez des tournois sur vos terrains. Attirez plus de joueurs et boostez votre activité.',
     ),
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _controller.addListener(() {
+      setState(() => _pageOffset = _controller.page ?? 0);
+    });
+  }
+
+  @override
   void dispose() {
-    _ctrl.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
+  void _skip() {
+    _controller.animateToPage(
+      _pages.length - 1,
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.easeInOutCubic,
+    );
+  }
+
   void _next() {
-    if (_page < _slides.length - 1) {
-      _ctrl.nextPage(
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
+    if (_currentPage < _pages.length - 1) {
+      _controller.nextPage(
+        duration: const Duration(milliseconds: 500),
+        curve: Curves.easeInOutCubic,
       );
     } else {
       Get.offNamed(Routes.login);
     }
   }
 
-  void _skip() => Get.offNamed(Routes.login);
-
   @override
   Widget build(BuildContext context) {
-    final size = MediaQuery.of(context).size;
-
     return Scaffold(
-      backgroundColor: kBg,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // ── Skip button top-right ──
-            Align(
-              alignment: Alignment.centerRight,
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          // ── Backgrounds avec parallax ──
+          ...List.generate(_pages.length, (i) {
+            final delta = _pageOffset - i;
+            final parallax = delta * 80.0;
+            final opacity = (1.0 - delta.abs()).clamp(0.0, 1.0);
+
+            return Opacity(
+              opacity: opacity,
+              child: Transform.translate(
+                offset: Offset(parallax, 0),
+                child: Image.network(
+                  _pages[i].imageUrl,
+                  fit: BoxFit.cover,
+                  width: double.infinity,
+                  height: double.infinity,
+                  errorBuilder: (_, _, _) => Image.asset(
+                    _pages[i].fallbackAsset,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                  ),
+                  loadingBuilder: (_, child, progress) {
+                    if (progress == null) return child;
+                    return Container(
+                      color: const Color(0xFF0A2E1A),
+                      child: const Center(
+                        child: CircularProgressIndicator(color: kGreen),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+          }),
+
+          // ── Overlay sombre dégradé ──
+          Container(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Colors.black.withValues(alpha: 0.20),
+                  Colors.black.withValues(alpha: 0.65),
+                  Colors.black.withValues(alpha: 0.97),
+                ],
+                stops: const [0.0, 0.45, 1.0],
+              ),
+            ),
+          ),
+
+          // ── PageView invisible pour capturer le swipe ──
+          PageView.builder(
+            controller: _controller,
+            itemCount: _pages.length,
+            onPageChanged: (i) => setState(() => _currentPage = i),
+            itemBuilder: (_, _) => const SizedBox.expand(),
+          ),
+
+          // ── Bouton Passer ──
+          SafeArea(
+            child: Align(
+              alignment: Alignment.topRight,
               child: Padding(
-                padding: const EdgeInsets.only(top: 16, right: 28),
-                child: _page < _slides.length - 1
-                    ? GestureDetector(
-                        onTap: _skip,
-                        child: const Text(
-                          'Passer',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: kTextSub,
+                padding: const EdgeInsets.only(top: 8, right: 16),
+                child: AnimatedOpacity(
+                  opacity: _currentPage < _pages.length - 1 ? 1.0 : 0.0,
+                  duration: const Duration(milliseconds: 300),
+                  child: TextButton(
+                    onPressed: _skip,
+                    style: TextButton.styleFrom(
+                      backgroundColor: Colors.white.withValues(alpha: 0.15),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 18, vertical: 8),
+                    ),
+                    child: const Text(
+                      'Passer',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+
+          // ── Bas : texte + dots + bouton ──
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(28, 40, 28, 50),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black.withValues(alpha: 0.95),
+                  ],
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ── Titre ──
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 400),
+                    transitionBuilder: (child, anim) => FadeTransition(
+                      opacity: anim,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0, 0.15),
+                          end: Offset.zero,
+                        ).animate(CurvedAnimation(
+                            parent: anim, curve: Curves.easeOut)),
+                        child: child,
+                      ),
+                    ),
+                    child: Align(
+                      key: ValueKey(_currentPage),
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _pages[_currentPage].title,
+                        style: const TextStyle(
+                          fontFamily: 'Orbitron',
+                          color: Colors.white,
+                          fontSize: 28,
+                          fontWeight: FontWeight.w900,
+                          fontStyle: FontStyle.italic,
+                          height: 1.2,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  // ── Sous-titre ──
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 450),
+                    transitionBuilder: (child, anim) =>
+                        FadeTransition(opacity: anim, child: child),
+                    child: Align(
+                      key: ValueKey('sub_$_currentPage'),
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _pages[_currentPage].subtitle,
+                        style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.70),
+                          fontSize: 14,
+                          height: 1.6,
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  const SizedBox(height: 32),
+
+                  // ── Dots + bouton ──
+                  Row(
+                    children: [
+                      // Dots
+                      Row(
+                        children: List.generate(_pages.length, (i) {
+                          final active = i == _currentPage;
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                            margin: const EdgeInsets.only(right: 8),
+                            width: active ? 28 : 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: active
+                                  ? kGreen
+                                  : Colors.white.withValues(alpha: 0.35),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          );
+                        }),
+                      ),
+                      const Spacer(),
+                      // Bouton Suivant / Commencer
+                      GestureDetector(
+                        onTap: _next,
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          height: 54,
+                          padding:
+                              const EdgeInsets.symmetric(horizontal: 28),
+                          decoration: BoxDecoration(
+                            color: kGreen,
+                            borderRadius: BorderRadius.circular(30),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _currentPage < _pages.length - 1
+                                    ? 'Suivant'
+                                    : 'Commencer',
+                                style: const TextStyle(
+                                  fontFamily: 'Orbitron',
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Icon(Icons.chevron_right,
+                                  color: Colors.white, size: 22),
+                            ],
                           ),
                         ),
-                      )
-                    : const SizedBox(height: 20),
-              ),
-            ),
-
-            // ── PageView ──
-            Expanded(
-              child: PageView.builder(
-                controller: _ctrl,
-                onPageChanged: (i) => setState(() => _page = i),
-                itemCount: _slides.length,
-                itemBuilder: (_, i) => _SlidePage(
-                  slide: _slides[i],
-                  screenHeight: size.height,
-                ),
-              ),
-            ),
-
-            // ── Dot indicators (smooth_page_indicator) ──
-            Padding(
-              padding: const EdgeInsets.only(bottom: 28),
-              child: SmoothPageIndicator(
-                controller: _ctrl,
-                count: _slides.length,
-                effect: ExpandingDotsEffect(
-                  activeDotColor: kGreen,
-                  dotColor: kBorder,
-                  dotHeight: 8,
-                  dotWidth: 8,
-                  expansionFactor: 3.5,
-                  spacing: 6,
-                ),
-              ),
-            ),
-
-            // ── Main button ──
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: SizedBox(
-                width: double.infinity,
-                height: 54,
-                child: ElevatedButton(
-                  onPressed: _next,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: kGreen,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  child: Text(
-                    _page < _slides.length - 1 ? 'Suivant' : 'Commencer',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 48),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-// ─── Image type enum ────────────────────────────────────────────────────────
-
-enum _ImageType { terrain, logo, ball }
-
-// ─── Data Model ─────────────────────────────────────────────────────────────
-
-class _Slide {
-  final String imagePath;
-  final String title;
-  final String subtitle;
-  final _ImageType imageType;
-
-  const _Slide({
-    required this.imagePath,
-    required this.title,
-    required this.subtitle,
-    required this.imageType,
-  });
-}
-
-// ─── Slide Page Widget ──────────────────────────────────────────────────────
-
-class _SlidePage extends StatelessWidget {
-  final _Slide slide;
-  final double screenHeight;
-
-  const _SlidePage({required this.slide, required this.screenHeight});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 28),
-      child: Column(
-        children: [
-          // ── Image area (top ~55%) ──
-          SizedBox(
-            height: screenHeight * 0.45,
-            child: Center(
-              child: _buildImageArea(),
-            ),
-          ),
-
-          const SizedBox(height: 32),
-
-          // ── Title ──
-          Text(
-            slide.title,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-              color: kTextPrim,
-              height: 1.3,
-            ),
-          )
-              .animate()
-              .fadeIn(duration: 500.ms, delay: 200.ms)
-              .slideY(begin: 0.2, end: 0, duration: 500.ms, delay: 200.ms),
-
-          const SizedBox(height: 16),
-
-          // ── Subtitle ──
-          Text(
-            slide.subtitle,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              fontSize: 15,
-              color: kTextSub,
-              height: 1.6,
-            ),
-          )
-              .animate()
-              .fadeIn(duration: 500.ms, delay: 400.ms)
-              .slideY(begin: 0.2, end: 0, duration: 500.ms, delay: 400.ms),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildImageArea() {
-    switch (slide.imageType) {
-      case _ImageType.terrain:
-        // Terrain photo in a rounded container with green overlay
-        return ClipRRect(
-          borderRadius: BorderRadius.circular(24),
-          child: Stack(
-            children: [
-              Image.asset(
-                slide.imagePath,
-                width: double.infinity,
-                height: screenHeight * 0.38,
-                fit: BoxFit.cover,
-              ),
-              // Green gradient overlay
-              Positioned.fill(
-                child: Container(
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        kGreen.withValues(alpha: 0.15),
-                        kGreen.withValues(alpha: 0.40),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              // Small icon badge in corner
-              Positioned(
-                bottom: 16,
-                right: 16,
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.stadium_rounded,
-                    color: kGreen,
-                    size: 24,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        )
-            .animate()
-            .fadeIn(duration: 600.ms)
-            .scale(begin: const Offset(0.9, 0.9), end: const Offset(1, 1), duration: 600.ms);
-
-      case _ImageType.logo:
-        // Minifoot logo centered with decorative background
-        return Container(
-          width: 260,
-          height: 260,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: kGreenLight,
-            boxShadow: [
-              BoxShadow(
-                color: kGreen.withValues(alpha: 0.12),
-                blurRadius: 40,
-                spreadRadius: 10,
-              ),
-            ],
-          ),
-          child: Center(
-            child: Image.asset(
-              slide.imagePath,
-              width: 150,
-              height: 150,
-              fit: BoxFit.contain,
-            ),
-          ),
-        )
-            .animate()
-            .fadeIn(duration: 600.ms)
-            .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1), duration: 600.ms);
-
-      case _ImageType.ball:
-        // Animation Lottie du ballon qui rebondit
-        return Stack(
-          alignment: Alignment.center,
-          children: [
-            // Outer decorative ring
-            Container(
-              width: 260,
-              height: 260,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: kGreen.withValues(alpha: 0.12),
-                  width: 2,
-                ),
-              ),
-            ),
-            // Inner circle background
-            Container(
-              width: 220,
-              height: 220,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: kGreenLight,
-                boxShadow: [
-                  BoxShadow(
-                    color: kGreen.withValues(alpha: 0.10),
-                    blurRadius: 30,
-                    spreadRadius: 5,
+                      ),
+                    ],
                   ),
                 ],
               ),
             ),
-            // Lottie animation
-            Lottie.asset(
-              'assets/lottie/football_bounce.json',
-              width: 180,
-              height: 180,
-              fit: BoxFit.contain,
-              repeat: true,
-            ),
-          ],
-        )
-            .animate()
-            .fadeIn(duration: 600.ms)
-            .scale(begin: const Offset(0.8, 0.8), end: const Offset(1, 1), duration: 600.ms);
-    }
+          ),
+        ],
+      ),
+    );
   }
+}
+
+// ── Data model ────────────────────────────────────────────────────────────────
+
+class _OnboardingData {
+  final String imageUrl;
+  final String fallbackAsset;
+  final String title;
+  final String subtitle;
+
+  const _OnboardingData({
+    required this.imageUrl,
+    required this.fallbackAsset,
+    required this.title,
+    required this.subtitle,
+  });
 }

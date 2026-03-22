@@ -5,12 +5,14 @@ class TerrainModel {
   final String id;
   final String name;
   final String address;
+  final String? description;
   final int price;
   final String capacity;
   final String surface; // Gazon synthétique, Gazon naturel, Terre battue
+  final String dimensions;
   final String imageUrl;
   final bool isAsset;
-  final int overlayColor; // couleur overlay pour différencier visuellement
+  final int overlayColor;
   final double rating;
   bool status;
   final int bookingsThisMonth;
@@ -19,9 +21,11 @@ class TerrainModel {
     required this.id,
     required this.name,
     required this.address,
+    this.description,
     required this.price,
     required this.capacity,
     this.surface = 'Gazon synthétique',
+    this.dimensions = '40 x 25 m',
     required this.imageUrl,
     this.isAsset = false,
     this.overlayColor = 0xFF006F39,
@@ -48,12 +52,14 @@ class TerrainController extends GetxController {
         id: '1',
         name: 'Terrain Alpha',
         address: 'Cité Keur Gorgui, Dakar',
+        description: 'Terrain moderne avec gazon synthétique de haute qualité et éclairage LED. Idéal pour les matchs en soirée.',
         price: 8000,
         capacity: '5v5',
         surface: 'Gazon synthétique',
+        dimensions: '40 x 25 m',
         imageUrl: 'assets/images/terrain.webp',
         isAsset: true,
-        overlayColor: 0xFF006F39, // vert
+        overlayColor: 0xFF006F39,
         rating: 4.8,
         status: true,
         bookingsThisMonth: 24,
@@ -62,12 +68,14 @@ class TerrainController extends GetxController {
         id: '2',
         name: 'Terrain Beta',
         address: 'Almadies, Dakar',
+        description: 'Terrain en gazon naturel avec vue sur mer. Parking gratuit et vestiaires disponibles.',
         price: 10000,
         capacity: '7v7',
         surface: 'Gazon naturel',
+        dimensions: '60 x 40 m',
         imageUrl: 'assets/images/terrain.webp',
         isAsset: true,
-        overlayColor: 0xFF1565C0, // bleu
+        overlayColor: 0xFF1565C0,
         rating: 4.5,
         status: true,
         bookingsThisMonth: 18,
@@ -76,12 +84,14 @@ class TerrainController extends GetxController {
         id: '3',
         name: 'Terrain Omega',
         address: 'Plateau, Dakar',
+        description: 'Grand terrain officiel au cœur du Plateau. Idéal pour les compétitions et tournois.',
         price: 15000,
         capacity: '11v11',
         surface: 'Gazon synthétique',
+        dimensions: '105 x 68 m',
         imageUrl: 'assets/images/terrain.webp',
         isAsset: true,
-        overlayColor: 0xFFE65100, // orange
+        overlayColor: 0xFFE65100,
         rating: 4.2,
         status: false,
         bookingsThisMonth: 8,
@@ -94,6 +104,18 @@ class TerrainController extends GetxController {
     await Future.delayed(const Duration(milliseconds: 800));
     _loadMockTerrains();
     isLoading.value = false;
+  }
+
+  void onSearch(String query) {
+    if (query.isEmpty) {
+      _loadMockTerrains();
+    } else {
+      terrains.value = terrains
+          .where((t) =>
+              t.name.toLowerCase().contains(query.toLowerCase()) ||
+              t.address.toLowerCase().contains(query.toLowerCase()))
+          .toList();
+    }
   }
 
   int get totalTerrains => terrains.length;
