@@ -23,6 +23,10 @@ import '../features/profile/screens/profile_screen.dart';
 import '../features/profile/screens/edit_profile_screen.dart';
 import '../features/profile/screens/security_screen.dart';
 import '../features/profile/screens/payment_methods_screen.dart';
+import '../features/revenues/bindings/revenues_binding.dart';
+import '../features/revenues/screens/revenues_screen.dart';
+import '../features/chat/bindings/chat_binding.dart';
+import '../features/chat/screens/chat_list_screen.dart';
 
 abstract class Routes {
   static const splash       = '/';
@@ -41,6 +45,8 @@ abstract class Routes {
   static const editProfile    = '/profile/edit';
   static const security       = '/profile/security';
   static const paymentMethods = '/profile/payment-methods';
+  static const revenues        = '/revenues';
+  static const chat            = '/chat';
 }
 
 final appPages = [
@@ -159,6 +165,20 @@ final appPages = [
     page: () => const PaymentMethodsScreen(),
     binding: ProfileBinding(),
     transition: Transition.rightToLeftWithFade,
+    transitionDuration: const Duration(milliseconds: 300),
+  ),
+  GetPage(
+    name: Routes.revenues,
+    page: () => const RevenuesScreen(),
+    binding: RevenuesBinding(),
+    transition: Transition.cupertino,
+    transitionDuration: const Duration(milliseconds: 300),
+  ),
+  GetPage(
+    name: Routes.chat,
+    page: () => const ChatListScreen(),
+    binding: ChatBinding(),
+    transition: Transition.downToUp,
     transitionDuration: const Duration(milliseconds: 300),
   ),
 ];
