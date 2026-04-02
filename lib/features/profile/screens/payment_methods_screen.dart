@@ -109,7 +109,7 @@ class PaymentMethodsScreen extends GetView<ProfileController> {
             const SizedBox(height: 14),
 
             _buildPaymentCard(
-              name: 'Free Money',
+              name: 'Yas Money',
               number: '**** **** **** 9012',
               color: kGreen,
               bgColor: kGreenLight,

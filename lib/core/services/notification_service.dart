@@ -37,8 +37,12 @@ class NotificationService {
     debugPrint('Permission notifs : ${settings.authorizationStatus}');
 
     // 3. Récupérer le token FCM (pour l'envoyer à ton backend)
-    final token = await _messaging.getToken();
-    debugPrint('FCM Token : $token');
+    try {
+      final token = await _messaging.getToken();
+      debugPrint('FCM Token : $token');
+    } catch (e) {
+      debugPrint('Impossible d\'obtenir le token FCM : $e');
+    }
 
     // 4. Écouter les notifs en premier plan
     FirebaseMessaging.onMessage.listen(_onForegroundMessage);
@@ -47,9 +51,12 @@ class NotificationService {
     FirebaseMessaging.onMessageOpenedApp.listen(_onMessageOpenedApp);
 
     // 6. Vérifier si l'app a été ouverte via une notif (app fermée)
+    //    On attend que GetMaterialApp soit monté avant de naviguer
     final initialMessage = await _messaging.getInitialMessage();
     if (initialMessage != null) {
-      _handleNavigation(initialMessage);
+      Future.delayed(const Duration(milliseconds: 800), () {
+        _handleNavigation(initialMessage);
+      });
     }
 
     // 7. Token refresh
