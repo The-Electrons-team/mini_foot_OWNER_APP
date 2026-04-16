@@ -13,135 +13,220 @@ class TerrainListScreen extends GetView<TerrainController> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: kBg,
-      appBar: AppBar(
-        backgroundColor: kBgCard,
-        elevation: 0,
-        leading: GestureDetector(
-          onTap: controller.goBack,
-          child: Container(
-            margin: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: kBgSurface,
-              shape: BoxShape.circle,
+      backgroundColor: const Color(0xFFE5E0D8),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(64),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(
+              bottom: BorderSide(color: Color(0xFFF0EBE3)),
             ),
-            child: Icon(Icons.arrow_back_ios_new_rounded,
-                color: kTextPrim, size: 16),
           ),
-        ),
-        title: const Text(
-          'Mes Terrains',
-          style: TextStyle(
-            fontFamily: 'Orbitron',
-            fontSize: 15,
-            fontWeight: FontWeight.w800,
-            color: kGreen,
-          ),
-        ),
-        actions: [
-          Obx(() => Padding(
-                padding: const EdgeInsets.only(right: 16),
-                child: Center(
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: kGreenLight,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '${controller.activeTerrains}/${controller.totalTerrains} actifs',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: kGreen,
-                      ),
-                    ),
+          child: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: Center(
+              child: GestureDetector(
+                onTap: controller.goBack,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF0EBE3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: Color(0xFF1A1A1A),
+                    size: 16,
                   ),
                 ),
-              )),
-        ],
-      ),
+              ),
+            ),
+            centerTitle: true,
+            title: const Text(
+              'Mes Terrains',
+              style: TextStyle(
+                fontFamily: 'Orbitron',
+                fontSize: 18,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF006F39),
+              ),
+            ),
+          ),
+        ),
+      ).animate().fadeIn(duration: 400.ms),
       floatingActionButton: FloatingActionButton(
         onPressed: () => controller.goToForm(null),
-        backgroundColor: kGreen,
-        elevation: 6,
-        child: Icon(PhosphorIcons.plus(PhosphorIconsStyle.duotone),
-            color: Colors.white, size: 26),
+        backgroundColor: const Color(0xFF006F39),
+        elevation: 8,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: const Icon(
+          PhosphorIconsLight.plusCircle,
+          color: Colors.white,
+          size: 28,
+        ),
       ),
-      body: Column(
-        children: [
-          // ── Barre recherche ──────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
-            child: Container(
-              height: 48,
-              decoration: BoxDecoration(
-                color: kBgCard,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: kCardShadow,
-              ),
-              child: Row(
+      body: Container(
+        color: const Color(0xFFF5F0E8),
+        child: Column(
+          children: [
+            // ── En-tête : Badge & Recherche ──────────────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
+              child: Column(
                 children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    child: Icon(Icons.search_rounded,
-                        color: kTextLight, size: 22),
-                  ),
-                  Expanded(
-                    child: TextField(
-                      onChanged: controller.onSearch,
-                      style: const TextStyle(color: kTextPrim, fontSize: 14),
-                      decoration: const InputDecoration(
-                        hintText: 'Rechercher un terrain...',
-                        hintStyle:
-                            TextStyle(color: kTextLight, fontSize: 14),
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.symmetric(vertical: 14),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Vos infrastructures',
+                        style: TextStyle(
+                          color: Color(0xFF6B7280),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
+                      Obx(() => Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE8F5E9),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              '${controller.activeTerrains}/${controller.totalTerrains} actifs',
+                              style: const TextStyle(
+                                color: Color(0xFF006F39),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          )),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Container(
+                    height: 52,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: const Color(0xFFE5E0D8)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.03),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(
+                          PhosphorIconsLight.magnifyingGlass,
+                          color: Color(0xFF9CA3AF),
+                          size: 20,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: TextField(
+                            onChanged: controller.onSearch,
+                            style: const TextStyle(
+                              color: Color(0xFF1A1A1A),
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            decoration: const InputDecoration(
+                              hintText: 'Rechercher un terrain...',
+                              hintStyle: TextStyle(
+                                color: Color(0xFF9CA3AF),
+                                fontSize: 14,
+                              ),
+                              border: InputBorder.none,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              contentPadding: EdgeInsets.zero,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
-          ),
 
-          // ── Liste ────────────────────────────────────────────────────
-          Expanded(
-            child: Obx(() {
-              if (controller.isLoading.value) {
-                return ShimmerList(
-                  itemBuilder: (_, __) => const TerrainCardSkeleton(),
+            // ── Liste de terrains ─────────────────────────────────────────
+            Expanded(
+              child: Obx(() {
+                if (controller.isLoading.value) {
+                  return ShimmerList(
+                    itemBuilder: (_, __) => const TerrainCardSkeleton(),
+                  );
+                }
+                if (controller.terrains.isEmpty) {
+                  return _buildEmptyState();
+                }
+
+                return ListView(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 100),
+                  physics: const BouncingScrollPhysics(),
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: const Color(0xFFE5E0D8)),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.05),
+                            blurRadius: 15,
+                            offset: const Offset(0, 5),
+                          ),
+                        ],
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: Column(
+                        children: List.generate(
+                          controller.terrains.length,
+                          (index) {
+                            final terrain = controller.terrains[index];
+                            final isLast =
+                                index == controller.terrains.length - 1;
+                            return Column(
+                              children: [
+                                _TerrainRow(
+                                  terrain: terrain,
+                                  onToggle: () =>
+                                      controller.toggleStatus(terrain.id),
+                                  onEdit: () => controller.goToForm(terrain),
+                                  onDelete: () =>
+                                      controller.deleteConfirm(terrain.id),
+                                ).animate().fadeIn(
+                                    duration: 350.ms, delay: (index * 80).ms),
+                                if (!isLast)
+                                  const Divider(
+                                    color: Color(0xFFF0EBE3),
+                                    height: 1,
+                                    indent: 14,
+                                    endIndent: 14,
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
                 );
-              }
-              if (controller.terrains.isEmpty) {
-                return _buildEmptyState();
-              }
-              return ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 4, 16, 100),
-                physics: const BouncingScrollPhysics(),
-                itemCount: controller.terrains.length,
-                itemBuilder: (context, index) {
-                  final terrain = controller.terrains[index];
-                  return _TerrainRow(
-                    terrain: terrain,
-                    onToggle: () => controller.toggleStatus(terrain.id),
-                    onEdit: () => controller.goToForm(terrain),
-                    onDelete: () => controller.deleteConfirm(terrain.id),
-                  )
-                      .animate()
-                      .fadeIn(duration: 350.ms, delay: (index * 80).ms)
-                      .slideX(
-                          begin: 0.08,
-                          end: 0,
-                          duration: 350.ms,
-                          delay: (index * 80).ms,
-                          curve: Curves.easeOut);
-                },
-              );
-            }),
-          ),
-        ],
+              }),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -160,12 +245,13 @@ class TerrainListScreen extends GetView<TerrainController> {
                 style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: kTextPrim)),
+                    color: Color(0xFF1A1A1A))),
             const SizedBox(height: 8),
             const Text(
               'Ajoutez votre premier terrain\npour commencer.',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 14, color: kTextSub, height: 1.5),
+              style: TextStyle(
+                  fontSize: 14, color: Color(0xFF6B7280), height: 1.5),
             ),
           ],
         ),
@@ -173,8 +259,6 @@ class TerrainListScreen extends GetView<TerrainController> {
     ).animate().fadeIn(duration: 500.ms);
   }
 }
-
-// ─── Terrain Row (inspiré _PopularItem de minifoot_mobile) ───────────────────
 
 class _TerrainRow extends StatelessWidget {
   final TerrainModel terrain;
@@ -191,71 +275,67 @@ class _TerrainRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onEdit,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: kBgCard,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: kCardShadow,
-        ),
-        child: Row(
-          children: [
-            // ── Image arrondie (style minifoot_mobile _PopularItem) ──────
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: SizedBox(
-                width: 90,
-                height: 110,
-                child: Stack(
-                  fit: StackFit.expand,
+    return Opacity(
+      opacity: terrain.status ? 1.0 : 0.8,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onEdit,
+          splashColor: const Color(0xFFF5F0E8),
+          child: Padding(
+            padding: const EdgeInsets.all(14.0),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ── Image Vignette ───────────────────────────────────────
+                Stack(
                   children: [
-                    terrain.isAsset
-                        ? Image.asset(terrain.imageUrl, fit: BoxFit.cover)
-                        : Image.network(
-                            terrain.imageUrl,
-                            fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => Container(
-                              color: kGreen.withValues(alpha: 0.12),
-                              child: Icon(
-                                PhosphorIcons.courtBasketball(
-                                    PhosphorIconsStyle.duotone),
-                                color: kGreen, size: 32,
-                              ),
-                            ),
-                          ),
-                    // Badge statut en bas de l'image
+                    Container(
+                      width: 88,
+                      height: 88,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE5E0D8)),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(15),
+                        child: ColorFiltered(
+                          colorFilter: terrain.status
+                              ? const ColorFilter.mode(
+                                  Colors.transparent, BlendMode.multiply)
+                              : const ColorFilter.mode(
+                                  Colors.grey, BlendMode.saturation),
+                          child: terrain.isAsset
+                              ? Image.asset(terrain.imageUrl, fit: BoxFit.cover)
+                              : Image.network(
+                                  terrain.imageUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Container(
+                                    color:
+                                        const Color(0xFF006F39).withAlpha(30),
+                                    child: const Icon(PhosphorIconsLight.field),
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ),
+                    // Point Statut Superposé
                     Positioned(
-                      bottom: 0, left: 0, right: 0,
+                      top: 6,
+                      left: 6,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        width: 10,
+                        height: 10,
                         decoration: BoxDecoration(
                           color: terrain.status
-                              ? kGreen.withValues(alpha: 0.88)
-                              : Colors.black.withValues(alpha: 0.6),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              width: 5, height: 5,
-                              decoration: BoxDecoration(
-                                color: terrain.status
-                                    ? Colors.white
-                                    : Colors.red,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              terrain.status ? 'Actif' : 'Off',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 9,
-                                fontWeight: FontWeight.w700,
-                              ),
+                              ? const Color(0xFF006F39)
+                              : const Color(0xFF9CA3AF),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.1),
+                              blurRadius: 4,
                             ),
                           ],
                         ),
@@ -263,253 +343,249 @@ class _TerrainRow extends StatelessWidget {
                     ),
                   ],
                 ),
-              ),
-            ),
 
-            const SizedBox(width: 14),
+                const SizedBox(width: 14),
 
-            // ── Infos ────────────────────────────────────────────────────
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Nom + prix
-                  Row(
+                // ── Informations ───────────────────────────────────────────
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(
-                        child: Text(
-                          terrain.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                            color: kTextPrim,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: kGreenLight,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '${_fmt(terrain.price)} F/h',
-                          style: const TextStyle(
-                            color: kGreen,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 5),
-
-                  // Adresse
-                  Row(
-                    children: [
-                      Icon(Icons.location_on_rounded,
-                          color: kTextLight, size: 13),
-                      const SizedBox(width: 3),
-                      Expanded(
-                        child: Text(
-                          terrain.address,
-                          style: const TextStyle(
-                              fontSize: 12, color: kTextSub),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-
-                  // Note + étoiles
-                  Row(
-                    children: [
-                      ...List.generate(
-                        5,
-                        (i) => Icon(
-                          i < terrain.rating.floor()
-                              ? Icons.star_rounded
-                              : (i < terrain.rating
-                                  ? Icons.star_half_rounded
-                                  : Icons.star_border_rounded),
-                          color: const Color(0xFFFFB300),
-                          size: 14,
-                        ),
-                      ),
-                      const SizedBox(width: 5),
+                      // Titre
                       Text(
-                        terrain.rating.toString(),
+                        terrain.name,
                         style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                          color: kTextSub,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1A1A1A),
+                          letterSpacing: -0.2,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
 
-                  // Chips
-                  Row(
-                    children: [
-                      _InfoChip(
-                        icon: PhosphorIcons.users(PhosphorIconsStyle.duotone),
-                        label: terrain.capacity,
-                        color: kBlue,
-                        bgColor: kBlueLight,
-                      ),
-                      const SizedBox(width: 6),
-                      _InfoChip(
-                        icon: PhosphorIcons.calendarBlank(
-                            PhosphorIconsStyle.duotone),
-                        label: '${terrain.bookingsThisMonth} rés.',
-                        color: kGold,
-                        bgColor: kGoldLight,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  const Divider(color: kDivider, height: 1),
-                  const SizedBox(height: 8),
-
-                  // Actions : toggle + modifier + supprimer
-                  Row(
-                    children: [
-                      // Toggle actif/inactif
-                      GestureDetector(
-                        onTap: onToggle,
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: terrain.status ? kGreenLight : kBgSurface,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                              color: terrain.status ? kGreen : kBorder,
+                      // Localisation
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              PhosphorIconsLight.mapPin,
+                              size: 12,
+                              color: Color(0xFF6B7280),
                             ),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                terrain.status
-                                    ? PhosphorIcons.toggleRight(
-                                        PhosphorIconsStyle.duotone)
-                                    : PhosphorIcons.toggleLeft(
-                                        PhosphorIconsStyle.duotone),
-                                color: terrain.status ? kGreen : kTextLight,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 5),
-                              Text(
-                                terrain.status ? 'Actif' : 'Inactif',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: terrain.status ? kGreen : kTextSub,
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                terrain.address,
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Color(0xFF6B7280),
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            ],
-                          ),
+                            ),
+                          ],
                         ),
                       ),
-                      const Spacer(),
-                      // Modifier
-                      GestureDetector(
-                        onTap: onEdit,
-                        child: Container(
-                          width: 34, height: 34,
-                          decoration: BoxDecoration(
-                            color: kBlueLight,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            PhosphorIcons.pencilSimple(
-                                PhosphorIconsStyle.duotone),
-                            color: kBlue, size: 17,
-                          ),
+
+                      // Badges
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            _InfoBadge(
+                              label: '${_fmt(terrain.price)}k/h',
+                              isBold: true,
+                            ),
+                            _InfoBadge(label: terrain.capacity),
+                            _InfoBadge(
+                              label: terrain.rating.toString(),
+                              icon: PhosphorIconsFill.star,
+                              iconColor: const Color(0xFFF59E0B),
+                              backgroundColor: const Color(0xFFFEF3C7),
+                              borderColor: const Color(0xFFFDE68A),
+                              textColor: const Color(0xFFF59E0B),
+                            ),
+                          ],
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      // Supprimer
-                      GestureDetector(
-                        onTap: onDelete,
-                        child: Container(
-                          width: 34, height: 34,
-                          decoration: BoxDecoration(
-                            color: kRedLight,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          child: Icon(
-                            PhosphorIcons.trash(PhosphorIconsStyle.duotone),
-                            color: kRed, size: 17,
-                          ),
+
+                      // Actions bas
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            // Switch Toggle
+                            GestureDetector(
+                              onTap: onToggle,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 28,
+                                    height: 16,
+                                    padding: const EdgeInsets.all(2),
+                                    decoration: BoxDecoration(
+                                      color: terrain.status
+                                          ? const Color(0xFF006F39)
+                                          : const Color(0xFFE5E0D8),
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: AnimatedAlign(
+                                      duration: 200.ms,
+                                      alignment: terrain.status
+                                          ? Alignment.centerRight
+                                          : Alignment.centerLeft,
+                                      child: Container(
+                                        width: 12,
+                                        height: 12,
+                                        decoration: const BoxDecoration(
+                                          color: Colors.white,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    terrain.status ? 'Actif' : 'Inactif',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                      color: terrain.status
+                                          ? const Color(0xFF006F39)
+                                          : const Color(0xFF9CA3AF),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            // Boutons Edit/Delete
+                            Row(
+                              children: [
+                                _ActionButton(
+                                  icon: PhosphorIconsLight.pencil,
+                                  onTap: onEdit,
+                                ),
+                                _ActionButton(
+                                  icon: PhosphorIconsLight.trash,
+                                  onTap: onDelete,
+                                  hoverColor:
+                                      const Color(0xFFEF4444).withAlpha(20),
+                                  iconColor: const Color(0xFF9CA3AF),
+                                  hoverIconColor: const Color(0xFFEF4444),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
 
   static String _fmt(int price) {
-    final str = price.toString();
-    final buf = StringBuffer();
-    for (int i = 0; i < str.length; i++) {
-      if (i > 0 && (str.length - i) % 3 == 0) buf.write(' ');
-      buf.write(str[i]);
+    if (price >= 1000) {
+      return (price / 1000).toStringAsFixed(0);
     }
-    return buf.toString();
+    return price.toString();
   }
 }
 
-// ─── Info chip ───────────────────────────────────────────────────────────────
-
-class _InfoChip extends StatelessWidget {
-  final IconData icon;
+class _InfoBadge extends StatelessWidget {
   final String label;
-  final Color color;
-  final Color bgColor;
+  final IconData? icon;
+  final Color? iconColor;
+  final Color backgroundColor;
+  final Color borderColor;
+  final Color textColor;
+  final bool isBold;
 
-  const _InfoChip({
-    required this.icon,
+  const _InfoBadge({
     required this.label,
-    required this.color,
-    required this.bgColor,
+    this.icon,
+    this.iconColor,
+    this.backgroundColor = const Color(0xFFF5F0E8),
+    this.borderColor = const Color(0xFFE5E0D8),
+    this.textColor = const Color(0xFF1A1A1A),
+    this.isBold = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(8),
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: borderColor),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, color: color, size: 11),
-          const SizedBox(width: 3),
-          Text(label,
-              style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  color: color)),
+          if (icon != null) ...[
+            Icon(icon, size: 10, color: iconColor ?? textColor),
+            const SizedBox(width: 2),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.w500,
+              color: textColor,
+            ),
+          ),
         ],
       ),
     );
   }
 }
+
+class _ActionButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  final Color? hoverColor;
+  final Color? iconColor;
+  final Color? hoverIconColor;
+
+  const _ActionButton({
+    required this.icon,
+    required this.onTap,
+    this.hoverColor,
+    this.iconColor,
+    this.hoverIconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Icon(
+          icon,
+          size: 16,
+          color: iconColor ?? const Color(0xFF9CA3AF),
+        ),
+      ),
+    );
+  }
+}
+

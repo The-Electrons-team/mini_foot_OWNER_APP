@@ -334,7 +334,7 @@ class DashboardScreen extends GetView<DashboardController> {
                       const Text('Voir tout',
                           style: TextStyle(fontSize: 12, color: kGreen, fontWeight: FontWeight.w600)),
                       const SizedBox(width: 4),
-                      Icon(PhosphorIcons.caretRight(PhosphorIconsStyle.duotone), color: kGreen, size: 14),
+                      const Icon(Icons.chevron_right, color: kGreen, size: 18),
                     ],
                   ),
                 ),
@@ -843,7 +843,7 @@ class _RevenueCardAnimated extends StatelessWidget {
                 children: [
                   const Text('Détails', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: kGreen)),
                   const SizedBox(width: 3),
-                  Icon(PhosphorIcons.caretRight(PhosphorIconsStyle.duotone), color: kGreen, size: 14),
+                  const Icon(Icons.chevron_right, color: kGreen, size: 18),
                 ],
               ),
             ),
