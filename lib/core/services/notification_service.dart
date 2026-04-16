@@ -36,13 +36,12 @@ class NotificationService {
 
     debugPrint('Permission notifs : ${settings.authorizationStatus}');
 
-    // 3. Récupérer le token FCM (pour l'envoyer à ton backend)
-    try {
-      final token = await _messaging.getToken();
-      debugPrint('FCM Token : $token');
-    } catch (e) {
-      debugPrint('Impossible d\'obtenir le token FCM : $e');
-    }
+    // 3. Récupérer le token FCM (en arrière-plan pour ne pas bloquer l'app)
+    _messaging.getToken().then((token) {
+      if (token != null) debugPrint('FCM Token : $token');
+    }).catchError((e) {
+      debugPrint('Note : Token FCM non disponible (normal sur compte Apple gratuit ou simulateur).');
+    });
 
     // 4. Écouter les notifs en premier plan
     FirebaseMessaging.onMessage.listen(_onForegroundMessage);
