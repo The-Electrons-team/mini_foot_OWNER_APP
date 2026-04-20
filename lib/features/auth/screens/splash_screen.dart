@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../routes/app_routes.dart';
+import '../controllers/auth_controller.dart';
 
 const Color kGreen = Color(0xFF006F39);
 const Color kBeige = Color(0xFFF5F0E8);
@@ -55,10 +56,23 @@ class _SplashScreenState extends State<SplashScreen>
       });
     _dotsController.forward();
 
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) Get.offNamed(Routes.onboarding);
-    });
+    _checkAuth();
   }
+
+  void _checkAuth() async {
+    final authController = Get.find<AuthController>();
+    final isAuthenticated = await authController.checkAuthStatus();
+    
+    await Future.delayed(const Duration(milliseconds: 1500));
+    if (mounted) {
+      if (isAuthenticated) {
+        Get.offAllNamed(Routes.dashboard);
+      } else {
+        Get.offNamed(Routes.onboarding);
+      }
+    }
+  }
+
 
   @override
   void dispose() {

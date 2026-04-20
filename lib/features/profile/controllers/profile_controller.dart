@@ -1,49 +1,39 @@
 import 'package:get/get.dart';
-import '../../../routes/app_routes.dart';
+import '../../auth/controllers/auth_controller.dart';
 
 class ProfileController extends GetxController {
-  final ownerName     = 'Mamadou Sy'.obs;
-  final phone         = '+221 77 123 45 67'.obs;
+  final AuthController _authController = Get.find<AuthController>();
+
+  // Use computed values from AuthController user
+  RxString get ownerName => '${_authController.user.value?.firstName ?? ""} ${_authController.user.value?.lastName ?? ""}'.trim().obs;
+  RxString get phone => (_authController.user.value?.phone ?? "Pas de numéro").obs;
+  
+  // Mock data for other fields (until we have real stats from backend)
   final email         = 'mamadou.sy@minifoot.sn'.obs;
-  final totalTerrains = 3.obs;
-  final memberSince   = 'Janvier 2025'.obs;
-  final totalBookings = 128.obs;
-  final rating        = 4.8.obs;
-  final totalRevenue  = 485000.obs;
-  final planName      = 'Premium'.obs;
-  final planExpiry    = '22 Juin 2026'.obs;
+  final totalTerrains = 0.obs;
+  final memberSince   = 'Avril 2024'.obs;
+  final totalBookings = 0.obs;
+  final rating        = 5.0.obs;
+  final totalRevenue  = 0.obs;
+  final planName      = 'Gratuit'.obs;
+  final planExpiry    = 'N/A'.obs;
 
   final isEditing = false.obs;
-
-  // Profile completion
-  int get completionPercent {
-    int done = 0;
-    if (ownerName.value.isNotEmpty) done++;
-    if (email.value.isNotEmpty) done++;
-    if (phone.value.isNotEmpty) done++;
-    if (totalTerrains.value > 0) done++;
-    // 4 out of 5 = 80%
-    return ((done / 5) * 100).round();
-  }
-
-  String get completionLabel {
-    final p = completionPercent;
-    if (p >= 100) return 'Profil complet';
-    return 'Profil complete a $p%';
-  }
 
   void toggleEdit() => isEditing.toggle();
 
   void logout() {
-    Get.offAllNamed(Routes.login);
+    _authController.logout();
   }
 
   String get initials {
-    final parts = ownerName.value.split(' ');
+    final name = ownerName.value;
+    if (name.isEmpty) return "??";
+    final parts = name.split(' ');
     if (parts.length >= 2) {
       return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     }
-    return ownerName.value.substring(0, 2).toUpperCase();
+    return name.substring(0, name.length >= 2 ? 2 : name.length).toUpperCase();
   }
 
   String formatRevenue(int amount) {

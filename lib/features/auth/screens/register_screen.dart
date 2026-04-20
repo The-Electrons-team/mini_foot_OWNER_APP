@@ -1,8 +1,9 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
+import 'package:intl/intl.dart';
 import '../../../core/theme/app_theme.dart';
 import '../controllers/auth_controller.dart';
 import 'otp_screen.dart';
@@ -15,62 +16,81 @@ class RegisterScreen extends GetView<AuthController> {
     final prenomCtrl = TextEditingController();
     final nomCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
-    final cniCtrl = TextEditingController();
     final passCtrl = TextEditingController();
-    final confirmCtrl = TextEditingController();
+    final confirmPassCtrl = TextEditingController();
+    final birthDate = Rxn<DateTime>();
 
-    final passwordStrength = 0.0.obs;
-    final passwordStrengthColor = kBorder.obs;
-    final passwordStrengthLabel = ''.obs;
-
-    void updatePasswordStrength(String value) {
-      if (value.isEmpty) {
-        passwordStrength.value = 0;
-        passwordStrengthColor.value = kBorder;
-        passwordStrengthLabel.value = '';
-      } else if (value.length < 6) {
-        passwordStrength.value = 0.33;
-        passwordStrengthColor.value = kRed;
-        passwordStrengthLabel.value = 'Faible';
-      } else if (value.length <= 8) {
-        passwordStrength.value = 0.66;
-        passwordStrengthColor.value = kGold;
-        passwordStrengthLabel.value = 'Moyen';
-      } else {
-        passwordStrength.value = 1.0;
-        passwordStrengthColor.value = kGreen;
-        passwordStrengthLabel.value = 'Fort';
-      }
+    void selectDate() async {
+      final now = DateTime.now();
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: DateTime(now.year - 18, 1, 1),
+        firstDate: DateTime(1930),
+        lastDate: DateTime(now.year - 5),
+        builder: (context, child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: const ColorScheme.light(
+                primary: kGreen,
+                onPrimary: Colors.white,
+                onSurface: kTextPrim,
+              ),
+            ),
+            child: child!,
+          );
+        },
+      );
+      if (picked != null) birthDate.value = picked;
     }
 
-    void submit() {
-      final phone = phoneCtrl.text.trim();
+    void submit() async {
+      final phone = '+221${phoneCtrl.text.trim()}';
       if (prenomCtrl.text.trim().isEmpty ||
           nomCtrl.text.trim().isEmpty ||
-          phone.isEmpty ||
-          cniCtrl.text.trim().isEmpty ||
-          passCtrl.text.isEmpty) {
+          phoneCtrl.text.trim().isEmpty ||
+          passCtrl.text.trim().isEmpty ||
+          birthDate.value == null) {
         Get.snackbar(
           'Champs requis',
-          'Veuillez remplir tous les champs',
+          'Veuillez remplir tous les champs personnels et le mot de passe',
           backgroundColor: kRed,
           colorText: Colors.white,
           snackPosition: SnackPosition.TOP,
         );
         return;
       }
-      if (passCtrl.text != confirmCtrl.text) {
+
+      if (passCtrl.text != confirmPassCtrl.text) {
         Get.snackbar(
           'Erreur',
           'Les mots de passe ne correspondent pas',
           backgroundColor: kRed,
           colorText: Colors.white,
-          snackPosition: SnackPosition.TOP,
         );
         return;
       }
+      
+      if (passCtrl.text.length < 6) {
+        Get.snackbar(
+          'Erreur',
+          'Le mot de passe doit faire au moins 6 caractères',
+          backgroundColor: kRed,
+          colorText: Colors.white,
+        );
+        return;
+      }
+
+      await controller.startSignup(phone);
+      
       Get.to(
-        () => OtpScreen(phone: phone),
+        () => OtpScreen(
+          phone: phone,
+          firstName: prenomCtrl.text.trim(),
+          lastName: nomCtrl.text.trim(),
+          password: passCtrl.text.trim(),
+          birthDate: birthDate.value,
+          isNewUser: true,
+        ),
         transition: Transition.rightToLeftWithFade,
         duration: const Duration(milliseconds: 350),
       );
@@ -112,7 +132,7 @@ class RegisterScreen extends GetView<AuthController> {
 
                     // Titre
                     const Text(
-                      'Creer votre compte',
+                      'Créer votre compte',
                       style: TextStyle(
                         fontFamily: 'Orbitron',
                         fontSize: 22,
@@ -125,26 +145,26 @@ class RegisterScreen extends GetView<AuthController> {
                     const SizedBox(height: 6),
 
                     const Text(
-                      'Rejoignez des milliers de proprietaires\nde terrains sur MiniFoot',
+                      'Rejoignez des milliers de propriétaires\nde terrains sur MiniFoot',
                       style: TextStyle(fontSize: 14, color: kTextSub, height: 1.5),
                     ).animate().fadeIn(duration: 400.ms, delay: 150.ms).slideY(begin: 0.2, end: 0),
 
                     const SizedBox(height: 28),
 
-                    // Section identite
+                    // Section identité
                     _SectionHeader(
                       icon: PhosphorIcons.identificationCard(PhosphorIconsStyle.duotone),
-                      label: 'Identite',
+                      label: 'Identité',
                     ).animate().fadeIn(duration: 400.ms, delay: 180.ms),
 
                     const SizedBox(height: 14),
 
-                    // Prenom + Nom cote a cote
+                    // Prénom + Nom côte à côte
                     Row(
                       children: [
                         Expanded(
                           child: _buildField(
-                            label: 'Prenom',
+                            label: 'Prénom',
                             ctrl: prenomCtrl,
                             icon: PhosphorIcons.user(PhosphorIconsStyle.duotone),
                             hint: 'Mamadou',
@@ -164,14 +184,40 @@ class RegisterScreen extends GetView<AuthController> {
 
                     const SizedBox(height: 16),
 
-                    // CNI
-                    _buildField(
-                      label: 'Numero CNI',
-                      ctrl: cniCtrl,
-                      icon: PhosphorIcons.identificationBadge(PhosphorIconsStyle.duotone),
-                      hint: '1 234 567 890 12',
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    // Date de naissance
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const _Label('Date de naissance'),
+                        const SizedBox(height: 8),
+                        Obx(() => GestureDetector(
+                              onTap: selectDate,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                                decoration: BoxDecoration(
+                                  color: kBgSurface,
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(color: kBorder),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Icon(PhosphorIcons.calendar(PhosphorIconsStyle.duotone),
+                                        color: kTextLight, size: 20),
+                                    const SizedBox(width: 12),
+                                    Text(
+                                      birthDate.value == null
+                                          ? 'Sélectionner une date'
+                                          : DateFormat('dd/MM/yyyy').format(birthDate.value!),
+                                      style: TextStyle(
+                                        color: birthDate.value == null ? kTextLight : kTextPrim,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )),
+                      ],
                     ).animate().fadeIn(duration: 400.ms, delay: 240.ms).slideY(begin: 0.15, end: 0),
 
                     const SizedBox(height: 24),
@@ -184,11 +230,11 @@ class RegisterScreen extends GetView<AuthController> {
 
                     const SizedBox(height: 14),
 
-                    // Telephone
+                    // Téléphone
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const _Label('Numero de telephone'),
+                        const _Label('Numéro de téléphone'),
                         const SizedBox(height: 8),
                         TextField(
                           controller: phoneCtrl,
@@ -227,116 +273,41 @@ class RegisterScreen extends GetView<AuthController> {
 
                     const SizedBox(height: 24),
 
-                    // Section securite
+                    // Section Sécurité
                     _SectionHeader(
                       icon: PhosphorIcons.lock(PhosphorIconsStyle.duotone),
-                      label: 'Securite',
+                      label: 'Sécurité',
                     ).animate().fadeIn(duration: 400.ms, delay: 300.ms),
 
                     const SizedBox(height: 14),
 
-                    // Mot de passe
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _Label('Mot de passe'),
-                        const SizedBox(height: 8),
-                        Obx(() => TextField(
-                              controller: passCtrl,
-                              obscureText: controller.obscurePass.value,
-                              onChanged: updatePasswordStrength,
-                              style: const TextStyle(color: kTextPrim, fontSize: 16),
-                              decoration: InputDecoration(
-                                hintText: '........',
-                                prefixIcon: Icon(
-                                  PhosphorIcons.lock(PhosphorIconsStyle.duotone),
-                                  color: kTextLight,
-                                  size: 20,
-                                ),
-                                suffixIcon: GestureDetector(
-                                  onTap: controller.toggleObscure,
-                                  child: Icon(
-                                    controller.obscurePass.value
-                                        ? PhosphorIcons.eyeSlash(PhosphorIconsStyle.duotone)
-                                        : PhosphorIcons.eye(PhosphorIconsStyle.duotone),
-                                    color: kTextLight,
-                                    size: 20,
-                                  ),
-                                ),
-                              ),
-                            )),
-                        const SizedBox(height: 10),
-                        Obx(() => passwordStrength.value > 0
-                            ? Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: LinearProgressIndicator(
-                                      value: passwordStrength.value,
-                                      backgroundColor: kBorder,
-                                      color: passwordStrengthColor.value,
-                                      minHeight: 4,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    passwordStrengthLabel.value,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                      color: passwordStrengthColor.value,
-                                    ),
-                                  ),
-                                ],
-                              )
-                            : const SizedBox.shrink()),
-                      ],
+                    _buildField(
+                      label: 'Mot de passe',
+                      ctrl: passCtrl,
+                      icon: PhosphorIcons.lockSimple(PhosphorIconsStyle.duotone),
+                      hint: '••••••••',
+                      isPassword: true,
                     ).animate().fadeIn(duration: 400.ms, delay: 320.ms).slideY(begin: 0.15, end: 0),
 
                     const SizedBox(height: 16),
 
-                    // Confirmer mot de passe
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _Label('Confirmer le mot de passe'),
-                        const SizedBox(height: 8),
-                        Obx(() => TextField(
-                              controller: confirmCtrl,
-                              obscureText: controller.obscureConfirm.value,
-                              style: const TextStyle(color: kTextPrim, fontSize: 16),
-                              decoration: InputDecoration(
-                                hintText: '........',
-                                prefixIcon: Icon(
-                                  PhosphorIcons.lockKey(PhosphorIconsStyle.duotone),
-                                  color: kTextLight,
-                                  size: 20,
-                                ),
-                                suffixIcon: GestureDetector(
-                                  onTap: controller.toggleObscureConfirm,
-                                  child: Icon(
-                                    controller.obscureConfirm.value
-                                        ? PhosphorIcons.eyeSlash(PhosphorIconsStyle.duotone)
-                                        : PhosphorIcons.eye(PhosphorIconsStyle.duotone),
-                                    color: kTextLight,
-                                    size: 20,
-                                  ),
-                                ),
-                              ),
-                            )),
-                      ],
-                    ).animate().fadeIn(duration: 400.ms, delay: 360.ms).slideY(begin: 0.15, end: 0),
+                    _buildField(
+                      label: 'Confirmer le mot de passe',
+                      ctrl: confirmPassCtrl,
+                      icon: PhosphorIcons.lockKey(PhosphorIconsStyle.duotone),
+                      hint: '••••••••',
+                      isPassword: true,
+                    ).animate().fadeIn(duration: 400.ms, delay: 340.ms).slideY(begin: 0.15, end: 0),
 
-                    const SizedBox(height: 28),
+                    const SizedBox(height: 32),
 
                     // Info OTP
                     Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: kGreenLight,
+                        color: kGreen.withValues(alpha: 0.05),
                         borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: kGreen.withValues(alpha: 0.3)),
+                        border: Border.all(color: kGreen.withValues(alpha: 0.2)),
                       ),
                       child: Row(
                         children: [
@@ -348,7 +319,7 @@ class RegisterScreen extends GetView<AuthController> {
                           const SizedBox(width: 12),
                           const Expanded(
                             child: Text(
-                              'Un code OTP a 6 chiffres sera envoye sur votre telephone pour valider votre compte.',
+                              'Un code de vérification sera envoyé sur votre téléphone pour valider votre identité.',
                               style: TextStyle(
                                 fontSize: 13,
                                 color: kGreen,
@@ -358,11 +329,11 @@ class RegisterScreen extends GetView<AuthController> {
                           ),
                         ],
                       ),
-                    ).animate().fadeIn(duration: 400.ms, delay: 400.ms),
+                    ).animate().fadeIn(duration: 400.ms, delay: 300.ms),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 32),
 
-                    // Bouton creer
+                    // Bouton créer
                     Obx(() => SizedBox(
                           width: double.infinity,
                           height: 54,
@@ -390,10 +361,10 @@ class RegisterScreen extends GetView<AuthController> {
                                     mainAxisAlignment: MainAxisAlignment.center,
                                     children: [
                                       const Text(
-                                        'Recevoir le code OTP',
+                                        'Recevoir le code de vérification',
                                         style: TextStyle(
                                           fontWeight: FontWeight.w700,
-                                          fontSize: 16,
+                                          fontSize: 15,
                                           color: Colors.white,
                                         ),
                                       ),
@@ -406,7 +377,7 @@ class RegisterScreen extends GetView<AuthController> {
                                     ],
                                   ),
                           ),
-                        )).animate().fadeIn(duration: 400.ms, delay: 440.ms).slideY(begin: 0.1, end: 0),
+                        )).animate().fadeIn(duration: 400.ms, delay: 350.ms).slideY(begin: 0.1, end: 0),
 
                     const SizedBox(height: 20),
 
@@ -415,7 +386,7 @@ class RegisterScreen extends GetView<AuthController> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         const Text(
-                          'Deja un compte ? ',
+                          'Déjà un compte ? ',
                           style: TextStyle(color: kTextSub, fontSize: 14),
                         ),
                         GestureDetector(
@@ -430,7 +401,7 @@ class RegisterScreen extends GetView<AuthController> {
                           ),
                         ),
                       ],
-                    ).animate().fadeIn(duration: 400.ms, delay: 480.ms),
+                    ).animate().fadeIn(duration: 400.ms, delay: 400.ms),
 
                     const SizedBox(height: 32),
                   ],
@@ -448,24 +419,46 @@ class RegisterScreen extends GetView<AuthController> {
     required TextEditingController ctrl,
     required IconData icon,
     required String hint,
+    bool isPassword = false,
     TextInputType keyboardType = TextInputType.text,
     List<TextInputFormatter>? inputFormatters,
   }) {
+    final obscure = true.obs;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _Label(label),
         const SizedBox(height: 8),
-        TextField(
-          controller: ctrl,
-          keyboardType: keyboardType,
-          inputFormatters: inputFormatters,
-          style: const TextStyle(color: kTextPrim, fontSize: 16),
-          decoration: InputDecoration(
-            hintText: hint,
-            prefixIcon: Icon(icon, color: kTextLight, size: 20),
-          ),
-        ),
+        isPassword 
+          ? Obx(() => TextField(
+              controller: ctrl,
+              keyboardType: keyboardType,
+              obscureText: obscure.value,
+              inputFormatters: inputFormatters,
+              style: const TextStyle(color: kTextPrim, fontSize: 16),
+              decoration: InputDecoration(
+                hintText: hint,
+                prefixIcon: Icon(icon, color: kTextLight, size: 20),
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    obscure.value ? PhosphorIcons.eyeClosed() : PhosphorIcons.eye(),
+                    color: kTextLight,
+                  ),
+                  onPressed: () => obscure.toggle(),
+                ),
+              ),
+            ))
+          : TextField(
+              controller: ctrl,
+              keyboardType: keyboardType,
+              inputFormatters: inputFormatters,
+              style: const TextStyle(color: kTextPrim, fontSize: 16),
+              decoration: InputDecoration(
+                hintText: hint,
+                prefixIcon: Icon(icon, color: kTextLight, size: 20),
+              ),
+            ),
       ],
     );
   }

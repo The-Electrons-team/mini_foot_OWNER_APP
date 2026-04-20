@@ -32,8 +32,8 @@ class TerrainListScreen extends GetView<TerrainController> {
                 child: Container(
                   width: 40,
                   height: 40,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF0EBE3),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF0EBE3),
                     shape: BoxShape.circle,
                   ),
                   child: const Icon(
@@ -55,8 +55,8 @@ class TerrainListScreen extends GetView<TerrainController> {
               ),
             ),
           ),
-        ),
-      ).animate().fadeIn(duration: 400.ms),
+        ).animate().fadeIn(duration: 400.ms),
+      ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => controller.goToForm(null),
         backgroundColor: const Color(0xFF006F39),
@@ -313,7 +313,7 @@ class _TerrainRow extends StatelessWidget {
                                   errorBuilder: (_, __, ___) => Container(
                                     color:
                                         const Color(0xFF006F39).withAlpha(30),
-                                    child: const Icon(PhosphorIconsLight.field),
+                                    child: const Icon(PhosphorIconsLight.soccerBall),
                                   ),
                                 ),
                         ),

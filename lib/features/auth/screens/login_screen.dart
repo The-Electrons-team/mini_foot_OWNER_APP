@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
@@ -158,7 +158,10 @@ class LoginScreen extends GetView<AuthController> {
           TextField(
             controller: phoneCtrl,
             keyboardType: TextInputType.phone,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(9),
+            ],
             style: const TextStyle(color: kTextPrim, fontSize: 16),
             decoration: InputDecoration(
               hintText: '77 000 00 00',
@@ -185,7 +188,7 @@ class LoginScreen extends GetView<AuthController> {
             ),
           ).animate().fadeIn(duration: 400.ms, delay: 200.ms).slideY(begin: 0.15, end: 0),
 
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
 
           const _Label('Mot de passe'),
           const SizedBox(height: 8),
@@ -194,24 +197,20 @@ class LoginScreen extends GetView<AuthController> {
                 obscureText: controller.obscurePass.value,
                 style: const TextStyle(color: kTextPrim, fontSize: 16),
                 decoration: InputDecoration(
-                  hintText: '........',
-                  prefixIcon: Icon(
-                    PhosphorIcons.lock(PhosphorIconsStyle.duotone),
-                    color: kTextLight,
-                    size: 20,
+                  hintText: '••••••••',
+                  prefixIcon: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Icon(PhosphorIcons.lock(PhosphorIconsStyle.duotone), color: kGreen),
                   ),
-                  suffixIcon: GestureDetector(
-                    onTap: controller.toggleObscure,
-                    child: Icon(
-                      controller.obscurePass.value
-                          ? PhosphorIcons.eye(PhosphorIconsStyle.duotone)
-                          : PhosphorIcons.eyeSlash(PhosphorIconsStyle.duotone),
-                      color: kTextLight,
-                      size: 20,
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      controller.obscurePass.value ? PhosphorIcons.eyeClosed() : PhosphorIcons.eye(),
+                      color: kTextSub,
                     ),
+                    onPressed: controller.toggleObscure,
                   ),
                 ),
-              )).animate().fadeIn(duration: 400.ms, delay: 280.ms).slideY(begin: 0.15, end: 0),
+              )).animate().fadeIn(duration: 400.ms, delay: 250.ms).slideY(begin: 0.15, end: 0),
 
           const SizedBox(height: 32),
 
@@ -221,7 +220,10 @@ class LoginScreen extends GetView<AuthController> {
                 child: ElevatedButton(
                   onPressed: controller.isLoading.value
                       ? null
-                      : () => controller.login(phoneCtrl.text, passCtrl.text),
+                      : () => controller.startLogin(
+                            '+221${phoneCtrl.text.trim()}',
+                            passCtrl.text.trim(),
+                          ),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: kGreen,
                     foregroundColor: Colors.white,

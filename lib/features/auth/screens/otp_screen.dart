@@ -1,14 +1,28 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../routes/app_routes.dart';
+import '../controllers/auth_controller.dart';
 
 class OtpScreen extends StatefulWidget {
   final String phone;
-  const OtpScreen({super.key, required this.phone});
+  final String? firstName;
+  final String? lastName;
+  final String? password;
+  final DateTime? birthDate;
+  final bool isNewUser;
+
+  const OtpScreen({
+    super.key,
+    required this.phone,
+    this.firstName,
+    this.lastName,
+    this.password,
+    this.birthDate,
+    this.isNewUser = false,
+  });
 
   @override
   State<OtpScreen> createState() => _OtpScreenState();
@@ -22,7 +36,7 @@ class _OtpScreenState extends State<OtpScreen> {
   int _resendSeconds = 30;
   bool _canResend = false;
   String? _errorMessage;
-  bool _isLoading = false;
+  final AuthController _authController = Get.find<AuthController>();
 
   @override
   void initState() {
@@ -65,7 +79,6 @@ class _OtpScreenState extends State<OtpScreen> {
     }
     setState(() => _errorMessage = null);
 
-    // Auto-valider quand les 6 cases sont remplies
     final code = _controllers.map((c) => c.text).join();
     if (code.length == 6) {
       Future.delayed(const Duration(milliseconds: 200), _validate);
@@ -78,11 +91,20 @@ class _OtpScreenState extends State<OtpScreen> {
       setState(() => _errorMessage = 'Saisis les 6 chiffres du code');
       return;
     }
-    setState(() => _isLoading = true);
-    await Future.delayed(const Duration(seconds: 2)); // Simule appel API
-    if (!mounted) return;
-    setState(() => _isLoading = false);
-    Get.offAllNamed(Routes.dashboard);
+
+    if (widget.isNewUser) {
+      await _authController.verifyAndRegister(
+        phone: widget.phone,
+        code: code,
+        firstName: widget.firstName!,
+        lastName: widget.lastName!,
+        password: widget.password!,
+        birthDate: widget.birthDate,
+      );
+    } else {
+      // Pour une future connexion OTP (non implémentée ici car Login est direct si compte existe)
+      // Mais on garde la structure
+    }
   }
 
   @override
@@ -116,12 +138,11 @@ class _OtpScreenState extends State<OtpScreen> {
             children: [
               const SizedBox(height: 20),
 
-              // Icone
               Container(
                 width: 80,
                 height: 80,
                 decoration: BoxDecoration(
-                  color: kGreenLight,
+                  color: kGreen.withValues(alpha: 0.1),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(
@@ -134,7 +155,7 @@ class _OtpScreenState extends State<OtpScreen> {
               const SizedBox(height: 28),
 
               const Text(
-                'Verification OTP',
+                'Vérification OTP',
                 style: TextStyle(
                   fontFamily: 'Orbitron',
                   fontSize: 22,
@@ -146,7 +167,7 @@ class _OtpScreenState extends State<OtpScreen> {
               const SizedBox(height: 10),
 
               Text(
-                'Code envoye au\n\u{1F1F8}\u{1F1F3} +221 ${widget.phone}',
+                'Code envoyé au\n\u{1F1F8}\u{1F1F3} +221 ${widget.phone.replaceAll('+221', '')}',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   color: kTextSub,
@@ -157,12 +178,11 @@ class _OtpScreenState extends State<OtpScreen> {
 
               const SizedBox(height: 40),
 
-              // 6 cases OTP
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: List.generate(6, (i) {
                   return Container(
-                    width: 48,
+                    width: 44, // Ajusté pour éviter l'overflow
                     height: 58,
                     margin: const EdgeInsets.symmetric(horizontal: 4),
                     child: TextField(
@@ -200,7 +220,6 @@ class _OtpScreenState extends State<OtpScreen> {
                 }),
               ).animate().fadeIn(duration: 400.ms, delay: 200.ms),
 
-              // Erreur
               if (_errorMessage != null) ...[
                 const SizedBox(height: 12),
                 Text(
@@ -211,12 +230,11 @@ class _OtpScreenState extends State<OtpScreen> {
 
               const SizedBox(height: 36),
 
-              // Bouton valider
-              SizedBox(
+              Obx(() => SizedBox(
                 width: double.infinity,
                 height: 54,
                 child: ElevatedButton(
-                  onPressed: _isLoading ? null : _validate,
+                  onPressed: _authController.isLoading.value ? null : _validate,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: kGreen,
                     foregroundColor: Colors.white,
@@ -226,7 +244,7 @@ class _OtpScreenState extends State<OtpScreen> {
                       borderRadius: BorderRadius.circular(14),
                     ),
                   ),
-                  child: _isLoading
+                  child: _authController.isLoading.value
                       ? const SizedBox(
                           width: 22,
                           height: 22,
@@ -255,11 +273,10 @@ class _OtpScreenState extends State<OtpScreen> {
                           ],
                         ),
                 ),
-              ).animate().fadeIn(duration: 400.ms, delay: 300.ms).slideY(begin: 0.1, end: 0),
+              )).animate().fadeIn(duration: 400.ms, delay: 300.ms).slideY(begin: 0.1, end: 0),
 
               const SizedBox(height: 24),
 
-              // Renvoyer
               GestureDetector(
                 onTap: _canResend ? _startCountdown : null,
                 child: AnimatedDefaultTextStyle(

@@ -113,6 +113,20 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     _searchResults.clear();
   }
 
+  Future<void> _reverseGeocode(LatLng point) async {
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse'
+        '?lat=${point.latitude}&lon=${point.longitude}&format=json',
+      );
+      final res = await http.get(uri, headers: {'Accept-Language': 'fr'});
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        _addressCtrl.text = data['display_name'] ?? '';
+      }
+    } catch (_) {}
+  }
+
   // ── Géolocalisation ────────────────────────────────────────────────────────
   Future<void> _useCurrentLocation() async {
     _isLocating.value = true;
@@ -341,10 +355,18 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     ],
   );
 
+  Future<void> _pickImages() async {
+    final picker = ImagePicker();
+    final images = await picker.pickMultiImage();
+    if (images.isNotEmpty) {
+      _images.addAll(images);
+    }
+  }
+
   // ── 2. Informations ──────────────────────────────────────────────────────
   Widget _buildInfoSection() => _Card(
     title: 'Informations',
-    icon: PhosphorIconsLight.documentText,
+    icon: PhosphorIconsLight.fileText,
     child: Column(
       children: [
         _Field(
@@ -409,7 +431,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
   // ── 3. Formats de jeu — Chips ─────────────────────────────────────────────
   Widget _buildCapacitySection() => _Card(
     title: 'Formats de jeu',
-    icon: PhosphorIconsLight.usersGroup,
+    icon: PhosphorIconsLight.users,
     child: Obx(() => Wrap(
           spacing: 8,
           runSpacing: 8,
