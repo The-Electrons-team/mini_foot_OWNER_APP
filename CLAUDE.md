@@ -16,7 +16,7 @@ No tests are configured. No linting beyond `flutter_lints`.
 
 MiniFoot Owner is a Flutter mobile app for **mini-football pitch owners in Senegal**. It lets owners manage pitches, bookings, availability slots, payments, revenues, notifications, and chat. Built by ELECTRONS TEAM (developer: Mamadou Sy).
 
-**There is no backend yet** — all data is mock data hardcoded in controllers. The UI is fully built.
+**Backend status**: authentication, password reset/change, terrain management, owner reservation listing/detail/refusal, owner profile display/edit/avatar/phone/payout info, dashboard, revenues/payments, availability, and PDF reports are connected to the NestJS backend. Notifications and chat still use mock data or need owner-specific endpoints.
 
 ## Architecture
 
@@ -45,10 +45,11 @@ features/<name>/
 - **Color constants** use `k` prefix: `kBg`, `kGreen`, `kTextPrim`, `kBorder`, etc.
 - **Private widget builders** use `_build` prefix (e.g., `_buildPaymentCard()`) or private `_Widget` classes
 - **Animations**: Use `flutter_animate` extension syntax: `.animate().fadeIn(duration: 400.ms).slideY(begin: 0.05, end: 0)`
-- **Mock data** lives in controller `_loadMock...()` methods — replace these with API calls when backend is ready
+- **Mock data** still lives in some controller `_loadMock...()` methods — replace module by module with service calls
 - **Fonts**: Orbitron for titles/headings, DMSans for body text
 - **Border radius**: 14px for inputs/buttons, 18px for cards
 - **Payment methods**: Wave (blue `#00B0F0`), Orange Money (orange `#FF6D00`), Yas Money (gold `#FFD100`) — logos in `assets/images/`
+- **PDF reports**: use built-in `pdf` fonts for generation; do not rely on the local `DMSans-Variable.ttf` asset unless it has been replaced with a real TTF file.
 
 ## Important Gotchas
 
@@ -59,6 +60,8 @@ features/<name>/
 
 ## Feature Status
 
-**Complete UI (mock data)**: auth flow (splash→onboarding→login→register→OTP), dashboard, terrain list/form, reservations, availability (calendar+slots+swipe+long-press), payments (grouped transactions+method breakdown+detail sheets), notifications (list+FCM push), profile (SliverAppBar+edit+security+payment methods), revenues, chat list
+**Connected**: auth flow (splash→onboarding→login→register→OTP), forgot/reset password, profile password change, profile avatar upload/display, phone change via OTP, owner payout info, terrain list/form CRUD, terrain image upload, terrain image display via storage proxy, Mapbox preview/geolocation in the terrain form, owner reservation list/detail/refusal, profile display and first/last name update, availability, dashboard, revenues, payments, and PDF reports.
 
-**Not yet implemented**: reports (PDF generation — `pdf`/`printing` packages already installed), real backend/API, real auth, real payment integration, real-time chat, map-based terrain views (`flutter_map` installed)
+**Complete UI but still mock/partial**: notifications (list+FCM push), chat list.
+
+**Next backend task**: connect notifications owner and FCM registration.

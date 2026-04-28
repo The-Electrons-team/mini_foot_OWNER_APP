@@ -6,20 +6,14 @@ import '../../../routes/app_routes.dart';
 
 class AuthController extends GetxController {
   final AuthService _authService = AuthService();
-  
+
   final isLoading = false.obs;
   final user = Rxn<UserModel>();
   final token = RxnString();
-  
+
   // States for obscure text (still used in some screens perhaps, but we might remove them later)
   final obscurePass = true.obs;
   final obscureConfirm = true.obs;
-
-  @override
-  void onInit() {
-    super.onInit();
-    // tryAutoLogin will be called from Splash
-  }
 
   void toggleObscure() => obscurePass.value = !obscurePass.value;
   void toggleObscureConfirm() => obscureConfirm.value = !obscureConfirm.value;
@@ -30,9 +24,9 @@ class AuthController extends GetxController {
   Future<bool> checkAuthStatus() async {
     final prefs = await SharedPreferences.getInstance();
     final savedToken = prefs.getString('token');
-    
+
     if (savedToken == null) return false;
-    
+
     try {
       final userData = await _authService.getProfile(savedToken);
       token.value = savedToken;
@@ -51,10 +45,10 @@ class AuthController extends GetxController {
       if (res['token'] != null) {
         token.value = res['token'];
         user.value = UserModel.fromJson(res['user']);
-        
+
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('token', token.value!);
-        
+
         Get.offAllNamed(Routes.dashboard);
       }
     } catch (e) {
@@ -83,6 +77,56 @@ class AuthController extends GetxController {
     }
   }
 
+  Future<void> requestPasswordReset(String phone) async {
+    isLoading.value = true;
+    try {
+      await _authService.forgotPassword(phone);
+      Get.snackbar(
+        'Code envoyé',
+        'Un code de réinitialisation a été envoyé',
+        snackPosition: SnackPosition.TOP,
+      );
+    } catch (e) {
+      String message = 'Impossible d\'envoyer le code';
+      if (e.toString().contains('COMPTE_NON_TROUVE')) {
+        message = 'Aucun compte trouvé avec ce numéro.';
+      }
+      Get.snackbar('Erreur', message, snackPosition: SnackPosition.TOP);
+      rethrow;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> resetForgottenPassword({
+    required String phone,
+    required String code,
+    required String password,
+  }) async {
+    isLoading.value = true;
+    try {
+      await _authService.resetPassword(
+        phone: phone,
+        code: code,
+        password: password,
+      );
+      Get.snackbar(
+        'Mot de passe réinitialisé',
+        'Vous pouvez maintenant vous connecter',
+        snackPosition: SnackPosition.TOP,
+      );
+    } catch (e) {
+      String message = 'Impossible de réinitialiser le mot de passe';
+      if (e.toString().contains('CODE_INVALIDE')) {
+        message = 'Code invalide ou expiré.';
+      }
+      Get.snackbar('Erreur', message, snackPosition: SnackPosition.TOP);
+      rethrow;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   Future<void> verifyAndRegister({
     required String phone,
     required String password,
@@ -104,13 +148,13 @@ class AuthController extends GetxController {
           lastName: lastName,
           birthDate: birthDate?.toIso8601String(),
         );
-        
+
         token.value = res['token'];
         user.value = UserModel.fromJson(res['user']);
-        
+
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('token', token.value!);
-        
+
         Get.offAllNamed(Routes.dashboard);
       }
     } catch (e) {

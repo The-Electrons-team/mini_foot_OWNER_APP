@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import '../../../core/services/terrain_service.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Modèles
@@ -8,10 +9,10 @@ import 'package:get/get.dart';
 enum SlotStatus { available, booked, blocked }
 
 class TimeSlot {
-  final String time;       // ex: "08h00"
-  final String endTime;    // ex: "09h00"
+  final String time;
+  final String endTime;
   final SlotStatus status;
-  final String bookedBy;   // nom de l'équipe si réservé
+  final String bookedBy;
 
   const TimeSlot({
     required this.time,
@@ -21,15 +22,15 @@ class TimeSlot {
   });
 
   bool get isAvailable => status == SlotStatus.available;
-  bool get isBooked    => status == SlotStatus.booked;
-  bool get isBlocked   => status == SlotStatus.blocked;
+  bool get isBooked => status == SlotStatus.booked;
+  bool get isBlocked => status == SlotStatus.blocked;
 
   TimeSlot copyWith({SlotStatus? status}) => TimeSlot(
-        time: time,
-        endTime: endTime,
-        status: status ?? this.status,
-        bookedBy: bookedBy,
-      );
+    time: time,
+    endTime: endTime,
+    status: status ?? this.status,
+    bookedBy: bookedBy,
+  );
 }
 
 class TerrainOption {
@@ -44,38 +45,67 @@ class TerrainOption {
 // ══════════════════════════════════════════════════════════════════════════════
 
 class AvailabilityController extends GetxController {
-  // ── État ────────────────────────────────────────────────────────────────────
-  final focusedDay    = DateTime.now().obs;
-  final selectedDate  = DateTime.now().obs;
-  final selectedTerrain = 0.obs;
-  final slots         = <TimeSlot>[].obs;
-  final isLoading     = false.obs;
+  final _service = TerrainService();
 
-  // Mode calendrier : 'month' ou 'week'
+  final focusedDay = DateTime.now().obs;
+  final selectedDate = DateTime.now().obs;
+  final selectedTerrain = 0.obs;
+  final slots = <TimeSlot>[].obs;
+  final isLoading = false.obs;
+  final isLoadingTerrains = false.obs;
+  final isBulkUpdating = false.obs;
+  final errorMessage = ''.obs;
+
   final calendarFormat = 'month'.obs;
 
-  // Terrains disponibles
-  final terrains = <TerrainOption>[
-    const TerrainOption(id: 'alpha', name: 'Terrain Alpha'),
-    const TerrainOption(id: 'beta',  name: 'Terrain Beta'),
-    const TerrainOption(id: 'omega', name: 'Terrain Omega'),
-  ].obs;
+  final terrains = <TerrainOption>[].obs;
 
-  // Carte des jours ayant des événements (pour les marqueurs du calendrier)
-  final Map<DateTime, List<SlotStatus>> _eventMap = {};
-
-  // ── Initialisation ──────────────────────────────────────────────────────────
   @override
   void onInit() {
     super.onInit();
-    _buildEventMap();
-    _loadSlots(selectedDate.value);
+    _loadTerrains();
+  }
+
+  // ── Chargement des terrains ─────────────────────────────────────────────────
+  Future<void> _loadTerrains() async {
+    isLoadingTerrains.value = true;
+    errorMessage.value = '';
+    try {
+      final data = await _service.getMesTerrains();
+      terrains.value = data
+          .map((e) {
+            final m = e as Map<String, dynamic>;
+            return TerrainOption(
+              id: m['id'] as String? ?? '',
+              name: m['name'] as String? ?? '',
+            );
+          })
+          .where((t) => t.id.isNotEmpty)
+          .toList();
+      if (selectedTerrain.value >= terrains.length) {
+        selectedTerrain.value = 0;
+      }
+      if (terrains.isNotEmpty) {
+        await _loadSlots(selectedDate.value);
+      } else {
+        slots.clear();
+      }
+    } catch (e) {
+      errorMessage.value = 'Impossible de charger les terrains';
+      Get.snackbar(
+        'Erreur',
+        'Impossible de charger les terrains',
+        snackPosition: SnackPosition.TOP,
+      );
+    } finally {
+      isLoadingTerrains.value = false;
+    }
   }
 
   // ── Sélection de date ───────────────────────────────────────────────────────
   void onDaySelected(DateTime day, DateTime focused) {
     selectedDate.value = day;
-    focusedDay.value   = focused;
+    focusedDay.value = focused;
     _loadSlots(day);
   }
 
@@ -85,45 +115,142 @@ class AvailabilityController extends GetxController {
 
   // ── Sélection de terrain ────────────────────────────────────────────────────
   void selectTerrain(int index) {
+    if (index < 0 || index >= terrains.length) return;
     selectedTerrain.value = index;
     _loadSlots(selectedDate.value);
   }
 
-  // ── Basculer entre mois et semaine ──────────────────────────────────────────
   void toggleFormat() {
-    calendarFormat.value =
-        calendarFormat.value == 'month' ? 'week' : 'month';
+    calendarFormat.value = calendarFormat.value == 'month' ? 'week' : 'month';
+  }
+
+  // ── Chargement des créneaux depuis l'API ─────────────────────────────────────
+  Future<void> _loadSlots(DateTime date) async {
+    if (terrains.isEmpty) return;
+    isLoading.value = true;
+    errorMessage.value = '';
+    try {
+      final terrainId = terrains[selectedTerrain.value].id;
+      final dateStr = _formatDate(date);
+      final data = await _service.getCreneaux(terrainId, dateStr);
+
+      slots.value = data.map((item) {
+        final m = item as Map<String, dynamic>;
+        final time = m['slot'] as String;
+        final rawStatus =
+            m['status'] as String? ??
+            ((m['available'] == true) ? 'available' : 'blocked');
+
+        final status = switch (rawStatus) {
+          'booked' => SlotStatus.booked,
+          'blocked' => SlotStatus.blocked,
+          _ => SlotStatus.available,
+        };
+
+        return TimeSlot(
+          time: time,
+          endTime: _addThirtyMin(time),
+          status: status,
+        );
+      }).toList();
+    } catch (e) {
+      errorMessage.value = 'Impossible de charger les créneaux';
+      Get.snackbar(
+        'Erreur',
+        'Impossible de charger les créneaux',
+        snackPosition: SnackPosition.TOP,
+      );
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> refreshAvailability() async {
+    await _loadTerrains();
   }
 
   // ── Bloquer / Débloquer un créneau ─────────────────────────────────────────
-  void toggleBlock(String time) {
+  Future<bool> toggleBlock(String time, {bool silent = false}) async {
     final idx = slots.indexWhere((s) => s.time == time);
-    if (idx == -1 || slots[idx].isBooked) return;
+    if (idx == -1 || slots[idx].isBooked || terrains.isEmpty) return false;
 
-    final current = slots[idx];
-    slots[idx] = current.copyWith(
-      status: current.isBlocked ? SlotStatus.available : SlotStatus.blocked,
+    final terrainId = terrains[selectedTerrain.value].id;
+    final dateStr = _formatDate(selectedDate.value);
+    final isCurrentlyBlocked = slots[idx].isBlocked;
+
+    // Mise à jour optimiste
+    slots[idx] = slots[idx].copyWith(
+      status: isCurrentlyBlocked ? SlotStatus.available : SlotStatus.blocked,
     );
     slots.refresh();
+
+    try {
+      if (isCurrentlyBlocked) {
+        await _service.debloquerCreneau(terrainId, dateStr, time);
+      } else {
+        await _service.bloquerCreneau(terrainId, dateStr, time);
+      }
+      return true;
+    } catch (_) {
+      // Annulation en cas d'erreur
+      slots[idx] = slots[idx].copyWith(
+        status: isCurrentlyBlocked ? SlotStatus.blocked : SlotStatus.available,
+      );
+      slots.refresh();
+      if (!silent) {
+        Get.snackbar(
+          'Erreur',
+          'Impossible de modifier le créneau',
+          snackPosition: SnackPosition.TOP,
+        );
+      }
+      return false;
+    }
+  }
+
+  Future<int> blockAllAvailable() async {
+    return _bulkToggle(
+      slots.where((slot) => slot.isAvailable).map((slot) => slot.time).toList(),
+    );
+  }
+
+  Future<int> unblockAllBlocked() async {
+    return _bulkToggle(
+      slots.where((slot) => slot.isBlocked).map((slot) => slot.time).toList(),
+    );
+  }
+
+  Future<int> _bulkToggle(List<String> times) async {
+    if (times.isEmpty || isBulkUpdating.value) return 0;
+    isBulkUpdating.value = true;
+    var successCount = 0;
+    try {
+      for (final time in times) {
+        final ok = await toggleBlock(time, silent: true);
+        if (ok) successCount++;
+      }
+      return successCount;
+    } finally {
+      isBulkUpdating.value = false;
+    }
   }
 
   // ── Marqueurs calendrier ────────────────────────────────────────────────────
   List<SlotStatus> getEventsForDay(DateTime day) {
-    final key = _normalizeDate(day);
-    return _eventMap[key] ?? [];
+    if (!isSameDay(day, selectedDate.value)) return [];
+    return slots
+        .where((slot) => slot.isBooked || slot.isBlocked)
+        .map((slot) => slot.status)
+        .toList();
   }
 
-  bool hasBookingsOnDay(DateTime day) {
-    return getEventsForDay(day).any((s) => s == SlotStatus.booked);
-  }
+  bool hasBookingsOnDay(DateTime day) =>
+      getEventsForDay(day).any((status) => status == SlotStatus.booked);
 
   // ── Statistiques ────────────────────────────────────────────────────────────
-  int get availableCount =>
-      slots.where((s) => s.isAvailable).length;
-  int get bookedCount =>
-      slots.where((s) => s.isBooked).length;
-  int get blockedCount =>
-      slots.where((s) => s.isBlocked).length;
+  int get availableCount => slots.where((s) => s.isAvailable).length;
+  int get bookedCount => slots.where((s) => s.isBooked).length;
+  int get blockedCount => slots.where((s) => s.isBlocked).length;
 
   String get occupancyLabel {
     final total = slots.length;
@@ -137,119 +264,45 @@ class AvailabilityController extends GetxController {
     return bookedCount / total;
   }
 
-  // ── Données mock selon la date et le terrain ─────────────────────────────
-  void _loadSlots(DateTime date) {
-    isLoading.value = true;
-
-    // Simule un délai réseau court
-    Future.delayed(const Duration(milliseconds: 200), () {
-      final mockBookings = _getMockBookings(date);
-      final mockBlocked  = _getMockBlocked(date);
-
-      slots.value = List.generate(15, (i) {
-        final hour    = 8 + i;
-        final time    = '${hour.toString().padLeft(2, '0')}h00';
-        final endTime = '${(hour + 1).toString().padLeft(2, '0')}h00';
-
-        SlotStatus status;
-        String bookedBy = '';
-
-        if (mockBlocked.contains(time)) {
-          status = SlotStatus.blocked;
-        } else if (mockBookings.containsKey(time)) {
-          status = SlotStatus.booked;
-          bookedBy = mockBookings[time]!;
-        } else {
-          status = SlotStatus.available;
-        }
-
-        return TimeSlot(
-          time: time,
-          endTime: endTime,
-          status: status,
-          bookedBy: bookedBy,
-        );
-      });
-
-      isLoading.value = false;
-    });
-  }
-
-  Map<String, String> _getMockBookings(DateTime date) {
-    // Varie les réservations selon le jour de la semaine
-    final weekday = date.weekday;
-    if (weekday == DateTime.saturday || weekday == DateTime.sunday) {
-      return {
-        '08h00': 'Lions FC',
-        '10h00': 'AS Médina',
-        '12h00': 'Team Almadies',
-        '14h00': 'FC Grand Yoff',
-        '16h00': 'Star Club',
-        '19h00': 'Plateau FC',
-      };
-    }
-    if (weekday == DateTime.friday) {
-      return {
-        '10h00': 'Lions FC',
-        '16h00': 'AS Médina',
-        '20h00': 'United Dakar',
-      };
-    }
-    return {
-      '10h00': 'Lions FC',
-      '12h00': 'AS Médina',
-      '16h00': 'FC Grand Yoff',
-      '19h00': 'Star Club',
-    };
-  }
-
-  Set<String> _getMockBlocked(DateTime date) {
-    return {'08h00', '22h00'};
-  }
-
-  void _buildEventMap() {
-    final now = DateTime.now();
-    // Simule des événements pour les 30 prochains jours
-    for (int i = 0; i < 30; i++) {
-      final day = now.add(Duration(days: i));
-      final key = _normalizeDate(day);
-      if (day.weekday == DateTime.saturday ||
-          day.weekday == DateTime.sunday) {
-        _eventMap[key] = [
-          SlotStatus.booked,
-          SlotStatus.booked,
-          SlotStatus.booked,
-        ];
-      } else if (day.weekday == DateTime.friday) {
-        _eventMap[key] = [SlotStatus.booked];
-      } else if (i % 3 == 0) {
-        _eventMap[key] = [SlotStatus.booked, SlotStatus.booked];
-      }
-    }
-  }
-
-  DateTime _normalizeDate(DateTime d) =>
-      DateTime(d.year, d.month, d.day);
-
   // ── Helpers ─────────────────────────────────────────────────────────────────
+  String _formatDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  String _addThirtyMin(String time) {
+    final parts = time.split('h');
+    int h = int.parse(parts[0]);
+    int m = int.parse(parts[1]);
+    m += 30;
+    if (m >= 60) {
+      m -= 60;
+      h += 1;
+    }
+    return '${h.toString().padLeft(2, '0')}h${m.toString().padLeft(2, '0')}';
+  }
+
   bool isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
   bool isToday(DateTime day) => isSameDay(day, DateTime.now());
-  bool isBeforeToday(DateTime day) =>
-      day.isBefore(DateTime(
-        DateTime.now().year,
-        DateTime.now().month,
-        DateTime.now().day,
-      ));
+  bool isBeforeToday(DateTime day) => day.isBefore(
+    DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day),
+  );
 
-  // Noms des mois en français
   static const monthNames = [
-    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
-    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+    'Janvier',
+    'Février',
+    'Mars',
+    'Avril',
+    'Mai',
+    'Juin',
+    'Juillet',
+    'Août',
+    'Septembre',
+    'Octobre',
+    'Novembre',
+    'Décembre',
   ];
 
-  // Noms courts des jours (lundi=1)
   static const dayNames = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
 
   String get selectedMonthYear {
@@ -265,33 +318,45 @@ class AvailabilityController extends GetxController {
 
   Color slotColor(SlotStatus status) {
     switch (status) {
-      case SlotStatus.available: return const Color(0xFF006F39);
-      case SlotStatus.booked:    return const Color(0xFFF59E0B);
-      case SlotStatus.blocked:   return const Color(0xFF9CA3AF);
+      case SlotStatus.available:
+        return const Color(0xFF006F39);
+      case SlotStatus.booked:
+        return const Color(0xFFF59E0B);
+      case SlotStatus.blocked:
+        return const Color(0xFF9CA3AF);
     }
   }
 
   Color slotBgColor(SlotStatus status) {
     switch (status) {
-      case SlotStatus.available: return const Color(0xFFE8F5E9);
-      case SlotStatus.booked:    return const Color(0xFFFEF3C7);
-      case SlotStatus.blocked:   return const Color(0xFFF3F4F6);
+      case SlotStatus.available:
+        return const Color(0xFFE8F5E9);
+      case SlotStatus.booked:
+        return const Color(0xFFFEF3C7);
+      case SlotStatus.blocked:
+        return const Color(0xFFF3F4F6);
     }
   }
 
   String slotLabel(SlotStatus status) {
     switch (status) {
-      case SlotStatus.available: return 'Libre';
-      case SlotStatus.booked:    return 'Réservé';
-      case SlotStatus.blocked:   return 'Bloqué';
+      case SlotStatus.available:
+        return 'Libre';
+      case SlotStatus.booked:
+        return 'Réservé';
+      case SlotStatus.blocked:
+        return 'Bloqué';
     }
   }
 
   IconData slotIcon(SlotStatus status) {
     switch (status) {
-      case SlotStatus.available: return Icons.check_circle_outline_rounded;
-      case SlotStatus.booked:    return Icons.groups_rounded;
-      case SlotStatus.blocked:   return Icons.lock_outline_rounded;
+      case SlotStatus.available:
+        return Icons.check_circle_outline_rounded;
+      case SlotStatus.booked:
+        return Icons.groups_rounded;
+      case SlotStatus.blocked:
+        return Icons.lock_outline_rounded;
     }
   }
 }

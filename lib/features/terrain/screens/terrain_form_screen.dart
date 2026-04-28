@@ -14,9 +14,7 @@ import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/lottie_success_dialog.dart';
 import '../controllers/terrain_controller.dart';
-
-const _kRadius = 16.0;
-const _kCardPad = EdgeInsets.all(18.0);
+import '../../auth/controllers/auth_controller.dart';
 
 class TerrainFormScreen extends StatefulWidget {
   const TerrainFormScreen({super.key});
@@ -28,37 +26,45 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
   late final TerrainController _ctrl;
   late final bool _isEditing;
 
-  final _nameCtrl    = TextEditingController();
+  final _nameCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
-  final _descCtrl    = TextEditingController();
-  final _priceCtrl   = TextEditingController();
-  final _dimCtrl     = TextEditingController(text: '40 x 25 m');
-  final _openCtrl    = TextEditingController(text: '08:00');
-  final _closeCtrl   = TextEditingController(text: '23:00');
-  final _searchCtrl  = TextEditingController();
+  final _descCtrl = TextEditingController();
+  final _priceCtrl = TextEditingController();
+  final _dimCtrl = TextEditingController(text: '40 x 25 m');
+  final _openCtrl = TextEditingController(text: '08:00');
+  final _closeCtrl = TextEditingController(text: '23:00');
+  final _searchCtrl = TextEditingController();
 
-  final _images      = <XFile>[].obs;
-  final _surface     = 'Gazon synthétique'.obs;
-  final _capacities  = <String>{}.obs; // multi-sélection
-  final _mapCenter   = Rx<LatLng>(const LatLng(14.6937, -17.4441));
-  final _mapCtrl     = MapController();
+  final _images = <XFile>[].obs;
+  final _surface = 'Gazon synthétique'.obs;
+  final _zone = 'DAKAR'.obs;
+  final _capacities = <String>{}.obs;
+  final _mapCenter = Rx<LatLng>(const LatLng(14.6937, -17.4441));
+  final _mapCtrl = MapController();
   final _searchResults = <Map<String, dynamic>>[].obs;
-  final _isSearching   = false.obs;
-  final _isLocating    = false.obs;
+  final _isSearching = false.obs;
+  final _isLocating = false.obs;
+  final _isSaving = false.obs;
 
   final _equipments = <String, bool>{
-    'Éclairage':  true,
+    'Éclairage': true,
     'Vestiaires': true,
-    'Parking':    false,
-    'Tribunes':   false,
-    'Wi-Fi':      false,
-    'Buvette':    false,
-    'Douches':    false,
-    'Arbitre':    false,
+    'Parking': false,
+    'Tribunes': false,
+    'Wi-Fi': false,
+    'Buvette': false,
+    'Douches': false,
+    'Arbitre': false,
   }.obs;
 
-  static const _surfaces = ['Gazon synthétique', 'Gazon naturel', 'Terre battue'];
+  static const _surfaces = [
+    'Gazon synthétique',
+    'Gazon naturel',
+    'Terre battue',
+  ];
   static const _allCapacities = ['5v5', '7v7', '11v11'];
+
+  String get _mapboxToken => dotenv.env['MAPBOX_ACCESS_TOKEN']?.trim() ?? '';
 
   @override
   void initState() {
@@ -67,26 +73,54 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     _isEditing = _ctrl.selectedTerrain.value != null;
     final t = _ctrl.selectedTerrain.value;
     if (t != null) {
-      _nameCtrl.text    = t.name;
+      _nameCtrl.text = t.name;
       _addressCtrl.text = t.address;
-      _descCtrl.text    = t.description ?? '';
-      _priceCtrl.text   = '${t.price}';
-      _surface.value    = t.surface;
-      _capacities.add(t.capacity);
+      _descCtrl.text = t.description ?? '';
+      _priceCtrl.text = '${t.pricePerHour}';
+      _zone.value = t.zone;
+
+      const validSurfaces = [
+        'Gazon synthétique',
+        'Gazon naturel',
+        'Terre battue',
+      ];
+      final surf = t.features.firstWhere(
+        (f) => validSurfaces.contains(f),
+        orElse: () => 'Gazon synthétique',
+      );
+      _surface.value = surf;
+
+      const caps = {'5v5', '7v7', '11v11'};
+      for (final f in t.features) {
+        if (caps.contains(f)) _capacities.add(f);
+        if (_equipments.containsKey(f)) _equipments[f] = true;
+      }
+
+      if (t.lat != null && t.lng != null) {
+        _mapCenter.value = LatLng(t.lat!, t.lng!);
+      }
     }
   }
 
   @override
   void dispose() {
-    _nameCtrl.dispose(); _addressCtrl.dispose(); _descCtrl.dispose();
-    _priceCtrl.dispose(); _dimCtrl.dispose(); _openCtrl.dispose();
-    _closeCtrl.dispose(); _searchCtrl.dispose();
+    _nameCtrl.dispose();
+    _addressCtrl.dispose();
+    _descCtrl.dispose();
+    _priceCtrl.dispose();
+    _dimCtrl.dispose();
+    _openCtrl.dispose();
+    _closeCtrl.dispose();
+    _searchCtrl.dispose();
     super.dispose();
   }
 
   // ── Recherche Nominatim ────────────────────────────────────────────────────
   Future<void> _searchAddress(String query) async {
-    if (query.trim().length < 3) { _searchResults.clear(); return; }
+    if (query.trim().length < 3) {
+      _searchResults.clear();
+      return;
+    }
     _isSearching.value = true;
     try {
       final uri = Uri.parse(
@@ -105,7 +139,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
   void _selectResult(Map<String, dynamic> r) {
     final lat = double.tryParse(r['lat'] ?? '') ?? 14.6937;
     final lng = double.tryParse(r['lon'] ?? '') ?? -17.4441;
-    final pt  = LatLng(lat, lng);
+    final pt = LatLng(lat, lng);
     _mapCenter.value = pt;
     _mapCtrl.move(pt, 15);
     _addressCtrl.text = r['display_name'] ?? '';
@@ -133,8 +167,13 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
-        Get.snackbar('GPS désactivé', 'Activez la localisation sur votre appareil',
-            backgroundColor: kBgCard, colorText: kTextPrim);
+        Get.snackbar(
+          'GPS désactivé',
+          'Activez la localisation sur votre appareil',
+          backgroundColor: kBgCard,
+          colorText: kTextPrim,
+        );
+        await Geolocator.openLocationSettings();
         _isLocating.value = false;
         return;
       }
@@ -142,30 +181,46 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
       if (perm == LocationPermission.denied) {
         perm = await Geolocator.requestPermission();
         if (perm == LocationPermission.denied) {
-          Get.snackbar('Permission refusée', 'Autorisation de localisation requise',
-              backgroundColor: kBgCard, colorText: kTextPrim);
+          Get.snackbar(
+            'Permission refusée',
+            'Autorisation de localisation requise',
+            backgroundColor: kBgCard,
+            colorText: kTextPrim,
+          );
           _isLocating.value = false;
           return;
         }
       }
+      if (perm == LocationPermission.deniedForever) {
+        Get.snackbar(
+          'Permission bloquée',
+          'Activez la localisation dans les réglages',
+          backgroundColor: kBgCard,
+          colorText: kTextPrim,
+        );
+        await Geolocator.openAppSettings();
+        _isLocating.value = false;
+        return;
+      }
       final pos = await Geolocator.getCurrentPosition(
-          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high));
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
       final pt = LatLng(pos.latitude, pos.longitude);
       _mapCenter.value = pt;
       _mapCtrl.move(pt, 16);
-      // Reverse geocoding
-      final uri = Uri.parse(
-        'https://nominatim.openstreetmap.org/reverse'
-        '?lat=${pos.latitude}&lon=${pos.longitude}&format=json',
-      );
-      final res = await http.get(uri, headers: {'Accept-Language': 'fr'});
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body);
-        _addressCtrl.text = data['display_name'] ?? '';
-      }
+      _addressCtrl.text = 'Votre position';
+      _searchCtrl.text = 'Votre position';
+      _searchResults.clear();
     } catch (e) {
-      Get.snackbar('Erreur', 'Impossible d\'obtenir la position',
-          backgroundColor: kBgCard, colorText: kTextPrim);
+      Get.snackbar(
+        'Erreur',
+        'Impossible d\'obtenir la position',
+        backgroundColor: kBgCard,
+        colorText: kTextPrim,
+      );
     }
     _isLocating.value = false;
   }
@@ -179,9 +234,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
         child: Container(
           decoration: const BoxDecoration(
             color: Colors.white,
-            border: Border(
-              bottom: BorderSide(color: Color(0xFFF0EBE3)),
-            ),
+            border: Border(bottom: BorderSide(color: Color(0xFFF0EBE3))),
           ),
           child: AppBar(
             backgroundColor: Colors.transparent,
@@ -226,13 +279,25 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
               children: [
                 _buildPhotosSection().animate().fadeIn(duration: 350.ms),
                 const SizedBox(height: 20),
-                _buildInfoSection().animate().fadeIn(duration: 350.ms, delay: 50.ms),
+                _buildInfoSection().animate().fadeIn(
+                  duration: 350.ms,
+                  delay: 50.ms,
+                ),
                 const SizedBox(height: 20),
-                _buildCapacitySection().animate().fadeIn(duration: 350.ms, delay: 100.ms),
+                _buildCapacitySection().animate().fadeIn(
+                  duration: 350.ms,
+                  delay: 100.ms,
+                ),
                 const SizedBox(height: 20),
-                _buildEquipmentsSection().animate().fadeIn(duration: 350.ms, delay: 150.ms),
+                _buildEquipmentsSection().animate().fadeIn(
+                  duration: 350.ms,
+                  delay: 150.ms,
+                ),
                 const SizedBox(height: 20),
-                _buildLocationSection().animate().fadeIn(duration: 350.ms, delay: 200.ms),
+                _buildLocationSection().animate().fadeIn(
+                  duration: 350.ms,
+                  delay: 200.ms,
+                ),
                 const SizedBox(height: 20),
               ],
             ),
@@ -263,97 +328,176 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     );
   }
 
-  // ── 1. Photos — Interface en pointillés ──────────────────────────────────
-  Widget _buildPhotosSection() => Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      GestureDetector(
-        onTap: _pickImages,
-        child: DottedBorder(
-          borderType: BorderType.RRect,
-          radius: const Radius.circular(20),
-          dashPattern: const [6, 4],
-          color: const Color(0xFF006F39).withAlpha(100),
-          strokeWidth: 2,
-          child: Container(
-            height: 120,
-            width: double.infinity,
-            decoration: BoxDecoration(
-              color: const Color(0xFFE8F5E9),
-              borderRadius: BorderRadius.circular(20),
+  // ── 1. Photos ──────────────────────────────────────────────────────────────
+  Widget _buildPhotosSection() {
+    final existingImage = _ctrl.selectedTerrain.value?.displayImage ?? '';
+
+    return Obx(() {
+      final hasLocalImage = _images.isNotEmpty;
+      final hasExistingImage = existingImage.isNotEmpty;
+      final hasPreview = hasLocalImage || hasExistingImage;
+
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE5E0D8)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
             ),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                const Icon(PhosphorIconsLight.cameraPlus,
-                    color: Color(0xFF006F39), size: 32),
-                const SizedBox(height: 8),
-                const Text(
-                  'Ajouter des photos',
-                  style: TextStyle(
-                      color: Color(0xFF006F39),
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14),
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F5E9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    PhosphorIconsLight.imageSquare,
+                    color: Color(0xFF006F39),
+                    size: 19,
+                  ),
                 ),
-                const Text(
-                  'JPG, PNG (Max 5Mo)',
-                  style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Photos du terrain',
+                    style: TextStyle(
+                      color: Color(0xFF1A1A1A),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                _IconPillButton(
+                  icon: PhosphorIconsLight.plus,
+                  label: hasPreview ? 'Ajouter' : 'Choisir',
+                  onTap: _pickImages,
                 ),
               ],
             ),
-          ),
-        ),
-      ),
-      Obx(() => _images.isEmpty
-          ? const SizedBox.shrink()
-          : Container(
-              height: 80,
-              margin: const EdgeInsets.only(top: 12),
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.only(bottom: 4),
-                itemCount: _images.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
-                itemBuilder: (_, i) => Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    Container(
-                      width: 64,
-                      height: 64,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFF006F39)),
-                        image: DecorationImage(
-                          image: FileImage(File(_images[i].path)),
+            const SizedBox(height: 14),
+            GestureDetector(
+              onTap: _pickImages,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (hasLocalImage)
+                        Image.file(File(_images.first.path), fit: BoxFit.cover)
+                      else if (hasExistingImage)
+                        Image.network(
+                          existingImage,
                           fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              _PhotoEmptyState(onTap: _pickImages),
+                        )
+                      else
+                        _PhotoEmptyState(onTap: _pickImages),
+                      if (hasPreview) ...[
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.0),
+                                Colors.black.withValues(alpha: 0.42),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    Positioned(
-                      top: -6,
-                      right: -6,
-                      child: GestureDetector(
-                        onTap: () => _images.removeAt(i),
-                        child: Container(
-                          width: 20,
-                          height: 20,
-                          decoration: const BoxDecoration(
-                              color: Color(0xFFEF4444),
-                              shape: BoxShape.circle,
-                              boxShadow: [
-                                BoxShadow(color: Colors.black26, blurRadius: 4)
-                              ]),
-                          child: const Icon(Icons.close,
-                              color: Colors.white, size: 12),
+                        Positioned(
+                          left: 12,
+                          right: 12,
+                          bottom: 12,
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.92),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Text(
+                                  'Photo principale',
+                                  style: TextStyle(
+                                    color: Color(0xFF1A1A1A),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              const Spacer(),
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF006F39),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  PhosphorIconsLight.cameraPlus,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
-                    ),
-                  ],
+                      ],
+                    ],
+                  ),
                 ),
               ),
-            )),
-    ],
-  );
+            ),
+            if (_images.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 72,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(bottom: 2),
+                  itemCount: _images.length + 1,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(width: 10),
+                  itemBuilder: (context, index) {
+                    if (index == _images.length) {
+                      return _AddPhotoTile(onTap: _pickImages);
+                    }
+
+                    return _PhotoThumb(
+                      file: File(_images[index].path),
+                      isPrimary: index == 0,
+                      onRemove: () => _images.removeAt(index),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    });
+  }
 
   Future<void> _pickImages() async {
     final picker = ImagePicker();
@@ -363,6 +507,13 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     }
   }
 
+  static const _zones = {
+    'DAKAR': 'Dakar',
+    'GUEEDIAWAYE': 'Guédiawaye',
+    'PIKINE': 'Pikine',
+    'RUFISQUE': 'Rufisque',
+  };
+
   // ── 2. Informations ──────────────────────────────────────────────────────
   Widget _buildInfoSection() => _Card(
     title: 'Informations',
@@ -370,104 +521,157 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     child: Column(
       children: [
         _Field(
-          label: 'Nom du terrain',
+          label: 'Nom du terrain *',
           ctrl: _nameCtrl,
           hint: 'Ex: Terrain Synthétique A',
           icon: PhosphorIconsLight.pen,
         ),
         const SizedBox(height: 16),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Type de surface',
-              style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
-                  color: Color(0xFF6B7280)),
-            ),
-            const SizedBox(height: 6),
-            Obx(() => Container(
-                  height: 48,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFE5E0D8)),
+        // Zone
+        _buildDropdown(
+          label: 'Zone *',
+          obs: _zone,
+          items: _zones.entries
+              .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+              .toList(),
+        ),
+        const SizedBox(height: 16),
+        // Prix
+        _Field(
+          label: 'Prix par heure (XOF) *',
+          ctrl: _priceCtrl,
+          hint: 'Ex: 15000',
+          icon: PhosphorIconsLight.currencyDollar,
+          keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: 16),
+        // Description
+        _MultilineField(
+          label: 'Description',
+          ctrl: _descCtrl,
+          hint: 'Décrivez votre terrain (optionnel)…',
+        ),
+        const SizedBox(height: 16),
+        // Surface
+        _buildDropdown(
+          label: 'Type de surface',
+          obs: _surface,
+          items: _surfaces
+              .map(
+                (s) => DropdownMenuItem(
+                  value: s,
+                  child: Row(
+                    children: [
+                      const Icon(
+                        PhosphorIconsLight.leaf,
+                        size: 16,
+                        color: Color(0xFF006F39),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(s),
+                    ],
                   ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      value: _surface.value,
-                      isExpanded: true,
-                      icon: const Icon(PhosphorIconsLight.caretDown,
-                          color: Color(0xFF006F39), size: 16),
-                      style: const TextStyle(
-                          color: Color(0xFF1A1A1A),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600),
-                      items: _surfaces
-                          .map((s) => DropdownMenuItem(
-                                value: s,
-                                child: Row(children: [
-                                  const Icon(PhosphorIconsLight.leaf,
-                                      size: 16, color: Color(0xFF006F39)),
-                                  const SizedBox(width: 8),
-                                  Text(s),
-                                ]),
-                              ))
-                          .toList(),
-                      onChanged: (v) {
-                        if (v != null) _surface.value = v;
-                      },
-                    ),
-                  ),
-                )),
-          ],
+                ),
+              )
+              .toList(),
         ),
       ],
     ),
+  );
+
+  Widget _buildDropdown({
+    required String label,
+    required RxString obs,
+    required List<DropdownMenuItem<String>> items,
+  }) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: Color(0xFF6B7280),
+        ),
+      ),
+      const SizedBox(height: 6),
+      Obx(
+        () => Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E0D8)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: obs.value,
+              isExpanded: true,
+              icon: const Icon(
+                PhosphorIconsLight.caretDown,
+                color: Color(0xFF006F39),
+                size: 16,
+              ),
+              style: const TextStyle(
+                color: Color(0xFF1A1A1A),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+              items: items,
+              onChanged: (v) {
+                if (v != null) obs.value = v;
+              },
+            ),
+          ),
+        ),
+      ),
+    ],
   );
 
   // ── 3. Formats de jeu — Chips ─────────────────────────────────────────────
   Widget _buildCapacitySection() => _Card(
     title: 'Formats de jeu',
     icon: PhosphorIconsLight.users,
-    child: Obx(() => Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _allCapacities.map((c) {
-            final sel = _capacities.contains(c);
-            return GestureDetector(
-              onTap: () {
-                if (sel) {
-                  _capacities.remove(c);
-                } else {
-                  _capacities.add(c);
-                }
-              },
-              child: AnimatedContainer(
-                duration: 200.ms,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                decoration: BoxDecoration(
-                  color: sel ? const Color(0xFF006F39) : Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: sel ? const Color(0xFF006F39) : const Color(0xFFE5E0D8),
-                  ),
-                ),
-                child: Text(
-                  c,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: sel ? Colors.white : const Color(0xFF6B7280),
-                  ),
+    child: Obx(
+      () => Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: _allCapacities.map((c) {
+          final sel = _capacities.contains(c);
+          return GestureDetector(
+            onTap: () {
+              if (sel) {
+                _capacities.remove(c);
+              } else {
+                _capacities.add(c);
+              }
+            },
+            child: AnimatedContainer(
+              duration: 200.ms,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: sel ? const Color(0xFF006F39) : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: sel
+                      ? const Color(0xFF006F39)
+                      : const Color(0xFFE5E0D8),
                 ),
               ),
-            );
-          }).toList(),
-        )),
+              child: Text(
+                c,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: sel ? Colors.white : const Color(0xFF6B7280),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    ),
   );
 
   // ── 4. Équipements — Grid ────────────────────────────────────────────────
@@ -487,7 +691,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
         'Douches': PhosphorIconsLight.shower,
         'Arbitre': PhosphorIconsLight.flag,
       };
-      
+
       return GridView.count(
         crossAxisCount: 2,
         shrinkWrap: true,
@@ -512,7 +716,13 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
               ),
               child: Row(
                 children: [
-                  Icon(icon, color: on ? const Color(0xFF006F39) : const Color(0xFF9CA3AF), size: 18),
+                  Icon(
+                    icon,
+                    color: on
+                        ? const Color(0xFF006F39)
+                        : const Color(0xFF9CA3AF),
+                    size: 18,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -520,7 +730,9 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: on ? FontWeight.w600 : FontWeight.w500,
-                        color: on ? const Color(0xFF006F39) : const Color(0xFF6B7280),
+                        color: on
+                            ? const Color(0xFF006F39)
+                            : const Color(0xFF6B7280),
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -557,10 +769,16 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
                       child: TextField(
                         controller: _searchCtrl,
                         onChanged: _searchAddress,
-                        style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A1A)),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF1A1A1A),
+                        ),
                         decoration: const InputDecoration(
                           hintText: 'Rechercher une adresse...',
-                          hintStyle: TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
+                          hintStyle: TextStyle(
+                            color: Color(0xFF9CA3AF),
+                            fontSize: 13,
+                          ),
                           border: InputBorder.none,
                           enabledBorder: InputBorder.none,
                           focusedBorder: InputBorder.none,
@@ -573,16 +791,30 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            GestureDetector(
-              onTap: _useCurrentLocation,
-              child: Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF006F39),
-                  borderRadius: BorderRadius.circular(12),
+            Obx(
+              () => GestureDetector(
+                onTap: _isLocating.value ? null : _useCurrentLocation,
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF006F39),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: _isLocating.value
+                      ? const Padding(
+                          padding: EdgeInsets.all(14),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(
+                          PhosphorIconsLight.gps,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                 ),
-                child: const Icon(PhosphorIconsLight.gps, color: Colors.white, size: 20),
               ),
             ),
           ],
@@ -599,15 +831,86 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
               border: Border.all(color: const Color(0xFFE5E0D8)),
             ),
             child: Column(
-              children: _searchResults.map((r) => ListTile(
-                dense: true,
-                leading: const Icon(PhosphorIconsLight.mapPin, size: 14),
-                title: Text(r['display_name'] ?? '', style: const TextStyle(fontSize: 12)),
-                onTap: () => _selectResult(r),
-              )).toList(),
+              children: _searchResults
+                  .map(
+                    (r) => ListTile(
+                      dense: true,
+                      leading: const Icon(PhosphorIconsLight.mapPin, size: 14),
+                      title: Text(
+                        r['display_name'] ?? '',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      onTap: () => _selectResult(r),
+                    ),
+                  )
+                  .toList(),
             ),
           );
         }),
+
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _addressCtrl,
+          builder: (context, value, child) {
+            final address = value.text.trim();
+            if (address.isEmpty) return const SizedBox.shrink();
+
+            return Obx(
+              () => Container(
+                margin: const EdgeInsets.only(top: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F5E9),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFCDE8D4)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF006F39),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: const Icon(
+                        PhosphorIconsLight.mapPin,
+                        color: Colors.white,
+                        size: 17,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            address,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF1A1A1A),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${_mapCenter.value.latitude.toStringAsFixed(5)}, ${_mapCenter.value.longitude.toStringAsFixed(5)}',
+                            style: const TextStyle(
+                              color: Color(0xFF006F39),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
 
         const SizedBox(height: 12),
         // Mini Map
@@ -621,71 +924,93 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
             ),
             child: Stack(
               children: [
-                Obx(() => FlutterMap(
-                      mapController: _mapCtrl,
-                      options: MapOptions(
-                        initialCenter: _mapCenter.value,
-                        initialZoom: 15,
-                        onTap: (_, point) {
-                          _mapCenter.value = point;
-                          _reverseGeocode(point);
-                        },
+                Obx(
+                  () => FlutterMap(
+                    mapController: _mapCtrl,
+                    options: MapOptions(
+                      initialCenter: _mapCenter.value,
+                      initialZoom: 15,
+                      onTap: (_, point) {
+                        _mapCenter.value = point;
+                        _reverseGeocode(point);
+                      },
+                      onPositionChanged: (camera, hasGesture) {
+                        if (hasGesture) _mapCenter.value = camera.center;
+                      },
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate: _mapboxToken.isEmpty
+                            ? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+                            : 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=$_mapboxToken',
+                        userAgentPackageName: 'com.minifoot.owner',
                       ),
-                      children: [
-                        TileLayer(
-                          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          userAgentPackageName: 'com.minifoot.owner',
-                        ),
-                        MarkerLayer(
-                          markers: [
-                            Marker(
-                              point: _mapCenter.value,
-                              width: 80,
-                              height: 80,
-                              child: Center(
-                                child: Stack(
-                                  alignment: Alignment.center,
-                                  children: [
-                                    Container(
-                                      width: 40,
-                                      height: 40,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF006F39).withAlpha(50),
-                                        shape: BoxShape.circle,
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: _mapCenter.value,
+                            width: 80,
+                            height: 80,
+                            child: Center(
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  Container(
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: const Color(
+                                            0xFF006F39,
+                                          ).withAlpha(50),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      )
+                                      .animate(onPlay: (c) => c.repeat())
+                                      .scale(
+                                        begin: const Offset(1, 1),
+                                        end: const Offset(2.5, 2.5),
+                                        duration: 1500.ms,
+                                        curve: Curves.easeOut,
+                                      )
+                                      .fadeOut(),
+                                  Container(
+                                    width: 14,
+                                    height: 14,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF006F39),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 2.5,
                                       ),
-                                    ).animate(onPlay: (c) => c.repeat()).scale(
-                                          begin: const Offset(1, 1),
-                                          end: const Offset(2.5, 2.5),
-                                          duration: 1500.ms,
-                                          curve: Curves.easeOut,
-                                        ).fadeOut(),
-                                    Container(
-                                      width: 14,
-                                      height: 14,
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFF006F39),
-                                        shape: BoxShape.circle,
-                                        border: Border.all(color: Colors.white, width: 2.5),
-                                        boxShadow: const [
-                                          BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2))
-                                        ],
-                                      ),
+                                      boxShadow: const [
+                                        BoxShadow(
+                                          color: Colors.black26,
+                                          blurRadius: 4,
+                                          offset: Offset(0, 2),
+                                        ),
+                                      ],
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
-                      ],
-                    )),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
                 const IgnorePointer(
                   child: Center(
                     child: Padding(
                       padding: EdgeInsets.only(top: 100),
                       child: Text(
                         'Glissez la carte pour affiner la position',
-                        style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 10),
+                        style: TextStyle(
+                          color: Color(0xFF9CA3AF),
+                          fontSize: 10,
+                        ),
                       ),
                     ),
                   ),
@@ -699,49 +1024,336 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
   );
 
   // ── 6. Bouton Enregistrer ────────────────────────────────────────────────
-  Widget _buildSaveButton() => SizedBox(
-    width: double.infinity,
-    child: ElevatedButton(
-      onPressed: _onSave,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: const Color(0xFF006F39),
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-        elevation: 0,
-      ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: const [
-          Icon(PhosphorIconsLight.floppyDisk, size: 20),
-          SizedBox(width: 10),
-          Text(
-            'Enregistrer le terrain',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
-            ),
+  Widget _buildSaveButton() => Obx(
+    () => SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _isSaving.value ? null : _onSave,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF006F39),
+          disabledBackgroundColor: const Color(0xFF006F39).withAlpha(120),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
           ),
-        ],
+          elevation: 0,
+        ),
+        child: _isSaving.value
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(PhosphorIconsLight.floppyDisk, size: 20),
+                  SizedBox(width: 10),
+                  Text(
+                    'Enregistrer le terrain',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
       ),
     ),
   );
 
-  void _onSave() {
-    Get.dialog(
-      LottieSuccessDialog(
-        message: _isEditing ? 'Terrain modifié !' : 'Terrain créé !',
-        subtitle: _isEditing
-            ? 'Les modifications ont été enregistrées'
-            : 'Votre nouveau terrain est prêt',
-      ),
-      barrierDismissible: false,
-    );
-    Future.delayed(const Duration(seconds: 2), _ctrl.goBack);
+  Future<void> _onSave() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) {
+      Get.snackbar(
+        'Champ requis',
+        'Veuillez saisir un nom de terrain',
+        snackPosition: SnackPosition.TOP,
+      );
+      return;
+    }
+
+    final price = int.tryParse(_priceCtrl.text.trim());
+    if (price == null || price <= 0) {
+      Get.snackbar(
+        'Champ requis',
+        'Veuillez saisir un prix valide (en XOF)',
+        snackPosition: SnackPosition.TOP,
+      );
+      return;
+    }
+
+    final address = _addressCtrl.text.trim();
+    if (address.isEmpty) {
+      Get.snackbar(
+        'Champ requis',
+        'Veuillez sélectionner une adresse sur la carte',
+        snackPosition: SnackPosition.TOP,
+      );
+      return;
+    }
+
+    _isSaving.value = true;
+    try {
+      final features = [
+        _surface.value,
+        ..._capacities,
+        ..._equipments.entries.where((e) => e.value).map((e) => e.key),
+      ];
+
+      final authCtrl = Get.find<AuthController>();
+
+      await _ctrl.saveTerrain(
+        name: name,
+        address: address,
+        zone: _zone.value,
+        pricePerHour: price,
+        lat: _mapCenter.value.latitude,
+        lng: _mapCenter.value.longitude,
+        description: _descCtrl.text.trim().isEmpty
+            ? null
+            : _descCtrl.text.trim(),
+        features: features,
+        images: _images.map((x) => File(x.path)).toList(),
+        managerId: authCtrl.user.value?.id,
+      );
+
+      Get.dialog(
+        LottieSuccessDialog(
+          message: _isEditing ? 'Terrain modifié !' : 'Terrain créé !',
+          subtitle: _isEditing
+              ? 'Les modifications ont été enregistrées'
+              : 'Votre nouveau terrain est prêt',
+        ),
+        barrierDismissible: false,
+      );
+      Future.delayed(const Duration(seconds: 2), () {
+        if (Get.isDialogOpen ?? false) {
+          Get.back();
+        }
+        _ctrl.goBack();
+      });
+    } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '');
+      Get.snackbar('Erreur', message, snackPosition: SnackPosition.TOP);
+    } finally {
+      _isSaving.value = false;
+    }
   }
 }
 
 // ─── Widgets de structure ──────────────────────────────────────────────────
+
+class _IconPillButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _IconPillButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF006F39),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 15),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PhotoEmptyState extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _PhotoEmptyState({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: DottedBorder(
+        borderType: BorderType.RRect,
+        radius: const Radius.circular(16),
+        dashPattern: const [7, 5],
+        color: const Color(0xFF006F39).withAlpha(110),
+        strokeWidth: 1.5,
+        child: Container(
+          width: double.infinity,
+          color: const Color(0xFFE8F5E9),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    PhosphorIconsLight.cameraPlus,
+                    color: Color(0xFF006F39),
+                    size: 25,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Ajouter une photo',
+                  style: TextStyle(
+                    color: Color(0xFF006F39),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'JPG ou PNG',
+                  style: TextStyle(color: Color(0xFF6B7280), fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AddPhotoTile extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _AddPhotoTile({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 70,
+        height: 70,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0EBE3),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE5E0D8)),
+        ),
+        child: const Icon(
+          PhosphorIconsLight.plus,
+          color: Color(0xFF006F39),
+          size: 22,
+        ),
+      ),
+    );
+  }
+}
+
+class _PhotoThumb extends StatelessWidget {
+  final File file;
+  final bool isPrimary;
+  final VoidCallback onRemove;
+
+  const _PhotoThumb({
+    required this.file,
+    required this.isPrimary,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: 70,
+          height: 70,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isPrimary
+                  ? const Color(0xFF006F39)
+                  : const Color(0xFFE5E0D8),
+              width: isPrimary ? 2 : 1,
+            ),
+            image: DecorationImage(image: FileImage(file), fit: BoxFit.cover),
+          ),
+        ),
+        Positioned(
+          top: -7,
+          right: -7,
+          child: GestureDetector(
+            onTap: onRemove,
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.close, color: Colors.white, size: 12),
+            ),
+          ),
+        ),
+        if (isPrimary)
+          Positioned(
+            left: 6,
+            bottom: 6,
+            child: Container(
+              width: 18,
+              height: 18,
+              decoration: const BoxDecoration(
+                color: Color(0xFF006F39),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check, color: Colors.white, size: 12),
+            ),
+          ),
+      ],
+    );
+  }
+}
 
 class _Card extends StatelessWidget {
   final String title;
@@ -797,12 +1409,14 @@ class _Field extends StatelessWidget {
   final TextEditingController ctrl;
   final String hint;
   final IconData icon;
+  final TextInputType? keyboardType;
 
   const _Field({
     required this.label,
     required this.ctrl,
     required this.hint,
     required this.icon,
+    this.keyboardType,
   });
 
   @override
@@ -822,21 +1436,40 @@ class _Field extends StatelessWidget {
         Container(
           height: 48,
           decoration: BoxDecoration(
-            color: const Color(0xFFF0EBE3),
+            color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: const Color(0xFFE5E0D8)),
           ),
-          child: TextField(
-            controller: ctrl,
-            style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A1A)),
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: const TextStyle(color: Color(0xFF9CA3AF), fontSize: 13),
-              border: InputBorder.none,
-              enabledBorder: InputBorder.none,
-              focusedBorder: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-            ),
+          child: Row(
+            children: [
+              const SizedBox(width: 14),
+              Icon(icon, color: const Color(0xFF006F39), size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: ctrl,
+                  keyboardType: keyboardType,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF1A1A1A),
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: hint,
+                    hintStyle: const TextStyle(
+                      color: Color(0xFF9CA3AF),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+            ],
           ),
         ),
       ],
@@ -844,3 +1477,55 @@ class _Field extends StatelessWidget {
   }
 }
 
+class _MultilineField extends StatelessWidget {
+  final String label;
+  final TextEditingController ctrl;
+  final String hint;
+
+  const _MultilineField({
+    required this.label,
+    required this.ctrl,
+    required this.hint,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF6B7280),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0EBE3),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E0D8)),
+          ),
+          child: TextField(
+            controller: ctrl,
+            maxLines: 3,
+            style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A1A)),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: const TextStyle(
+                color: Color(0xFF9CA3AF),
+                fontSize: 13,
+              ),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              contentPadding: const EdgeInsets.all(16),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}

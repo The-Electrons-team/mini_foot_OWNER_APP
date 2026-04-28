@@ -5,6 +5,7 @@ import 'package:flutter_animate/flutter_animate.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import 'package:table_calendar/table_calendar.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../routes/app_routes.dart';
 import '../controllers/availability_controller.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -48,13 +49,19 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
                   duration: const Duration(milliseconds: 250),
                   switchInCurve: Curves.easeOut,
                   switchOutCurve: Curves.easeIn,
-                  child: CustomScrollView(
+                  child: RefreshIndicator(
                     key: ValueKey(controller.selectedDate.value),
-                    physics: const BouncingScrollPhysics(),
-                    slivers: [
-                      SliverToBoxAdapter(child: _buildSlotsSection(context)),
-                      const SliverToBoxAdapter(child: SizedBox(height: 100)),
-                    ],
+                    color: kGreen,
+                    onRefresh: controller.refreshAvailability,
+                    child: CustomScrollView(
+                      physics: const AlwaysScrollableScrollPhysics(
+                        parent: BouncingScrollPhysics(),
+                      ),
+                      slivers: [
+                        SliverToBoxAdapter(child: _buildSlotsSection(context)),
+                        const SliverToBoxAdapter(child: SizedBox(height: 100)),
+                      ],
+                    ),
                   ),
                 );
               }),
@@ -86,76 +93,81 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
 
   // ── Stats compactes dans le header ────────────────────────────────────────
   Widget _buildCompactStats() {
-    return Obx(() => Padding(
-          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-          child: Row(
-            children: [
-              _CompactStat(
-                count: controller.availableCount,
-                label: 'Libres',
-                color: kGreen,
-                bgColor: kGreenLight,
-                icon: Icons.check_circle_outline_rounded,
-              ),
-              const SizedBox(width: 8),
-              _CompactStat(
-                count: controller.bookedCount,
-                label: 'Réservés',
-                color: kGold,
-                bgColor: kGoldLight,
-                icon: Icons.groups_rounded,
-              ),
-              const SizedBox(width: 8),
-              _CompactStat(
-                count: controller.blockedCount,
-                label: 'Bloqués',
-                color: kTextLight,
-                bgColor: kBgSurface,
-                icon: Icons.lock_outline_rounded,
-              ),
-              const SizedBox(width: 8),
-              // Taux d'occupation compact
-              Expanded(
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: kBgSurface,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        controller.occupancyLabel,
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w800,
-                          color: kTextPrim,
-                        ),
+    return Obx(
+      () => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+        child: Row(
+          children: [
+            _CompactStat(
+              count: controller.availableCount,
+              label: 'Libres',
+              color: kGreen,
+              bgColor: kGreenLight,
+              icon: Icons.check_circle_outline_rounded,
+            ),
+            const SizedBox(width: 8),
+            _CompactStat(
+              count: controller.bookedCount,
+              label: 'Réservés',
+              color: kGold,
+              bgColor: kGoldLight,
+              icon: Icons.groups_rounded,
+            ),
+            const SizedBox(width: 8),
+            _CompactStat(
+              count: controller.blockedCount,
+              label: 'Bloqués',
+              color: kTextLight,
+              bgColor: kBgSurface,
+              icon: Icons.lock_outline_rounded,
+            ),
+            const SizedBox(width: 8),
+            // Taux d'occupation compact
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 7,
+                ),
+                decoration: BoxDecoration(
+                  color: kBgSurface,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      controller.occupancyLabel,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: kTextPrim,
                       ),
-                      Expanded(
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: 8),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(4),
-                            child: LinearProgressIndicator(
-                              value: controller.occupancyRate,
-                              backgroundColor: kBgCard,
-                              valueColor: const AlwaysStoppedAnimation<Color>(
-                                  kGreen),
-                              minHeight: 5,
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: controller.occupancyRate,
+                            backgroundColor: kBgCard,
+                            valueColor: const AlwaysStoppedAnimation<Color>(
+                              kGreen,
                             ),
+                            minHeight: 5,
                           ),
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-            ],
-          ),
-        ));
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildAppBar(BuildContext context) {
@@ -175,65 +187,72 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
           ),
           // Titre
           Expanded(
-            child: Obx(() => Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Disponibilités',
-                  style: TextStyle(
-                    fontFamily: 'Orbitron',
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: kTextPrim,
-                  ),
-                ),
-                Text(
-                  controller.selectedDateLabel,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: kTextSub,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            )),
-          ),
-          // Toggle mois / semaine
-          Obx(() => GestureDetector(
-            onTap: controller.toggleFormat,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: kGreenLight,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: kGreen.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+            child: Obx(
+              () => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(
-                    controller.calendarFormat.value == 'month'
-                        ? Icons.calendar_view_week_rounded
-                        : Icons.calendar_month_rounded,
-                    size: 16,
-                    color: kGreen,
+                  const Text(
+                    'Disponibilités',
+                    style: TextStyle(
+                      fontFamily: 'Orbitron',
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: kTextPrim,
+                    ),
                   ),
-                  const SizedBox(width: 5),
                   Text(
-                    controller.calendarFormat.value == 'month'
-                        ? 'Semaine'
-                        : 'Mois',
+                    controller.selectedDateLabel,
                     style: const TextStyle(
                       fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: kGreen,
+                      color: kTextSub,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                 ],
               ),
             ),
-          )),
+          ),
+          // Toggle mois / semaine
+          Obx(
+            () => GestureDetector(
+              onTap: controller.toggleFormat,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: kGreenLight,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: kGreen.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      controller.calendarFormat.value == 'month'
+                          ? Icons.calendar_view_week_rounded
+                          : Icons.calendar_month_rounded,
+                      size: 16,
+                      color: kGreen,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      controller.calendarFormat.value == 'month'
+                          ? 'Semaine'
+                          : 'Mois',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: kGreen,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -243,53 +262,84 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
   Widget _buildTerrainSelector() {
     return SizedBox(
       height: 52,
-      child: Obx(() => ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        itemCount: controller.terrains.length,
-        separatorBuilder: (context, index) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final terrain = controller.terrains[i];
-          final selected = controller.selectedTerrain.value == i;
-          return GestureDetector(
-            onTap: () {
-              HapticFeedback.selectionClick();
-              controller.selectTerrain(i);
-            },
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: selected ? kGreen : kBgSurface,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: selected ? kGreen : kBorder,
-                  width: selected ? 0 : 1,
+      child: Obx(() {
+        if (controller.isLoadingTerrains.value) {
+          return ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            itemCount: 3,
+            separatorBuilder: (context, index) => const SizedBox(width: 8),
+            itemBuilder: (_, i) =>
+                Container(
+                      width: 118,
+                      decoration: BoxDecoration(
+                        color: kBgSurface,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    )
+                    .animate(onPlay: (c) => c.repeat())
+                    .shimmer(duration: 1200.ms, color: kBgCard),
+          );
+        }
+
+        if (controller.terrains.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: _NoTerrainChip(),
+          );
+        }
+
+        return ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          itemCount: controller.terrains.length,
+          separatorBuilder: (context, index) => const SizedBox(width: 8),
+          itemBuilder: (_, i) {
+            final terrain = controller.terrains[i];
+            final selected = controller.selectedTerrain.value == i;
+            return GestureDetector(
+              onTap: () {
+                HapticFeedback.selectionClick();
+                controller.selectTerrain(i);
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 6,
                 ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.sports_soccer_rounded,
-                    size: 14,
-                    color: selected ? Colors.white : kTextSub,
+                decoration: BoxDecoration(
+                  color: selected ? kGreen : kBgSurface,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: selected ? kGreen : kBorder,
+                    width: selected ? 0 : 1,
                   ),
-                  const SizedBox(width: 6),
-                  Text(
-                    terrain.name,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.sports_soccer_rounded,
+                      size: 14,
                       color: selected ? Colors.white : kTextSub,
                     ),
-                  ),
-                ],
+                    const SizedBox(width: 6),
+                    Text(
+                      terrain.name,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: selected ? Colors.white : kTextSub,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          );
-        },
-      )),
+            );
+          },
+        );
+      }),
     );
   }
 
@@ -438,89 +488,37 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
     });
   }
 
-  // ── Stats du jour ────────────────────────────────────────────────────────────
-  Widget _buildDayStats() {
-    return Obx(() => Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      child: Row(
-        children: [
-          _StatBadge(
-            count: controller.availableCount,
-            label: 'Libres',
-            color: kGreen,
-            bgColor: kGreenLight,
-            icon: Icons.check_circle_outline_rounded,
-          ),
-          const SizedBox(width: 10),
-          _StatBadge(
-            count: controller.bookedCount,
-            label: 'Réservés',
-            color: kGold,
-            bgColor: kGoldLight,
-            icon: Icons.groups_rounded,
-          ),
-          const SizedBox(width: 10),
-          _StatBadge(
-            count: controller.blockedCount,
-            label: 'Bloqués',
-            color: kTextLight,
-            bgColor: kBgSurface,
-            icon: Icons.lock_outline_rounded,
-          ),
-          const SizedBox(width: 10),
-          // Taux d'occupation
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: kBgCard,
-                borderRadius: BorderRadius.circular(14),
-                boxShadow: kCardShadow,
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    controller.occupancyLabel,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                      color: kTextPrim,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: controller.occupancyRate,
-                      backgroundColor: kBgSurface,
-                      valueColor: const AlwaysStoppedAnimation<Color>(kGreen),
-                      minHeight: 4,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  const Text(
-                    'Taux',
-                    style: TextStyle(fontSize: 10, color: kTextLight),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    ));
-  }
-
   // ── Section créneaux organisée par période ──────────────────────────────────
   Widget _buildSlotsSection(BuildContext context) {
     return Obx(() {
       final slots = controller.slots;
-      if (slots.isEmpty) return const SizedBox.shrink();
+      if (controller.isLoadingTerrains.value) {
+        return const SizedBox.shrink();
+      }
+      if (controller.terrains.isEmpty) {
+        return const _AvailabilityEmptyState(
+          icon: Icons.sports_soccer_rounded,
+          title: 'Aucun terrain',
+          message:
+              'Crée d’abord un terrain pour gérer ses créneaux de réservation.',
+          showCreateButton: true,
+        );
+      }
+      if (slots.isEmpty) {
+        return const _AvailabilityEmptyState(
+          icon: Icons.event_busy_rounded,
+          title: 'Aucun créneau',
+          message:
+              'Tire vers le bas pour recharger les disponibilités du jour.',
+        );
+      }
 
       // Séparer par périodes
-      final morning   = slots.where((s) => _hourOf(s.time) < 12).toList();
-      final afternoon = slots.where((s) => _hourOf(s.time) >= 12 && _hourOf(s.time) < 17).toList();
-      final evening   = slots.where((s) => _hourOf(s.time) >= 17).toList();
+      final morning = slots.where((s) => _hourOf(s.time) < 12).toList();
+      final afternoon = slots
+          .where((s) => _hourOf(s.time) >= 12 && _hourOf(s.time) < 17)
+          .toList();
+      final evening = slots.where((s) => _hourOf(s.time) >= 17).toList();
 
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -578,7 +576,11 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
                 total: evening.length,
               ),
               const SizedBox(height: 8),
-              _buildSlotGrid(evening, context, morning.length + afternoon.length),
+              _buildSlotGrid(
+                evening,
+                context,
+                morning.length + afternoon.length,
+              ),
             ],
           ],
         ),
@@ -586,7 +588,11 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
     });
   }
 
-  Widget _buildSlotGrid(List<TimeSlot> slots, BuildContext context, int animOffset) {
+  Widget _buildSlotGrid(
+    List<TimeSlot> slots,
+    BuildContext context,
+    int animOffset,
+  ) {
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -601,29 +607,33 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
         final slot = slots[i];
         final isNow = _isCurrentHourSlot(slot.time);
         return _SlotCard(
-          slot: slot,
-          isNow: isNow,
-          onTap: () => _onSlotTap(context, slot),
-          onLongPress: () {
-            if (slot.isBooked) return; // on ne peut pas bloquer un slot réservé
-            HapticFeedback.heavyImpact();
-            controller.toggleBlock(slot.time);
-            Get.snackbar(
-              slot.isBlocked ? 'Débloqué' : 'Bloqué',
-              '${slot.time} → ${slot.endTime}',
-              snackPosition: SnackPosition.BOTTOM,
-              backgroundColor: kBgCard,
-              colorText: kTextPrim,
-              margin: const EdgeInsets.all(16),
-              borderRadius: 16,
-              duration: const Duration(seconds: 1),
-              icon: Icon(
-                slot.isBlocked ? Icons.lock_open_rounded : Icons.lock_rounded,
-                color: slot.isBlocked ? kGreen : kTextLight,
-              ),
-            );
-          },
-        )
+              slot: slot,
+              isNow: isNow,
+              onTap: () => _onSlotTap(context, slot),
+              onLongPress: () async {
+                if (slot.isBooked) {
+                  return; // on ne peut pas bloquer un slot réservé
+                }
+                HapticFeedback.heavyImpact();
+                final wasBlocked = slot.isBlocked;
+                final ok = await controller.toggleBlock(slot.time);
+                if (!ok) return;
+                Get.snackbar(
+                  wasBlocked ? 'Débloqué' : 'Bloqué',
+                  '${slot.time} → ${slot.endTime}',
+                  snackPosition: SnackPosition.BOTTOM,
+                  backgroundColor: kBgCard,
+                  colorText: kTextPrim,
+                  margin: const EdgeInsets.all(16),
+                  borderRadius: 16,
+                  duration: const Duration(seconds: 1),
+                  icon: Icon(
+                    wasBlocked ? Icons.lock_open_rounded : Icons.lock_rounded,
+                    color: wasBlocked ? kGreen : kTextLight,
+                  ),
+                );
+              },
+            )
             .animate()
             .fadeIn(duration: 200.ms, delay: ((animOffset + i) * 25).ms)
             .scale(begin: const Offset(0.94, 0.94));
@@ -641,7 +651,14 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
           decoration: BoxDecoration(color: color, shape: BoxShape.circle),
         ),
         const SizedBox(width: 4),
-        Text(label, style: const TextStyle(fontSize: 11, color: kTextSub, fontWeight: FontWeight.w500)),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            color: kTextSub,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
       ],
     );
   }
@@ -659,20 +676,39 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
 
   // ── FAB ─────────────────────────────────────────────────────────────────────
   Widget _buildFab() {
-    return FloatingActionButton.extended(
-      onPressed: () => _showBulkActionSheet(),
-      backgroundColor: kGreen,
-      elevation: 3,
-      icon: const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
-      label: const Text(
-        'Gérer',
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
-          fontSize: 14,
+    return Obx(() {
+      if (controller.terrains.isEmpty ||
+          controller.slots.isEmpty ||
+          controller.isLoading.value ||
+          controller.isLoadingTerrains.value) {
+        return const SizedBox.shrink();
+      }
+
+      final isBusy = controller.isBulkUpdating.value;
+      return FloatingActionButton.extended(
+        onPressed: isBusy ? null : () => _showBulkActionSheet(),
+        backgroundColor: isBusy ? kTextLight : kGreen,
+        elevation: 3,
+        icon: isBusy
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Icon(Icons.tune_rounded, color: Colors.white, size: 20),
+        label: Text(
+          isBusy ? 'Mise à jour' : 'Gérer',
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
         ),
-      ),
-    );
+      );
+    });
   }
 
   // ── Tap sur un créneau → bottom sheet de détail ─────────────────────────────
@@ -717,9 +753,9 @@ class _SlotCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ctrl = Get.find<AvailabilityController>();
-    final bgColor     = ctrl.slotBgColor(slot.status);
+    final bgColor = ctrl.slotBgColor(slot.status);
     final accentColor = ctrl.slotColor(slot.status);
-    final icon        = ctrl.slotIcon(slot.status);
+    final icon = ctrl.slotIcon(slot.status);
 
     return GestureDetector(
       onTap: () {
@@ -752,7 +788,11 @@ class _SlotCard extends StatelessWidget {
             Positioned(
               top: 5,
               right: 6,
-              child: Icon(icon, size: 12, color: accentColor.withValues(alpha: 0.55)),
+              child: Icon(
+                icon,
+                size: 12,
+                color: accentColor.withValues(alpha: 0.55),
+              ),
             ),
             // Badge "Maintenant" en haut à gauche
             if (isNow)
@@ -760,14 +800,21 @@ class _SlotCard extends StatelessWidget {
                 top: 3,
                 left: 5,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 4,
+                    vertical: 1,
+                  ),
                   decoration: BoxDecoration(
                     color: kGreen,
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: const Text(
                     'NOW',
-                    style: TextStyle(fontSize: 7, fontWeight: FontWeight.w800, color: Colors.white),
+                    style: TextStyle(
+                      fontSize: 7,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -795,7 +842,9 @@ class _SlotCard extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 9,
                         fontWeight: FontWeight.w500,
-                        color: (isNow ? kGreen : accentColor).withValues(alpha: 0.75),
+                        color: (isNow ? kGreen : accentColor).withValues(
+                          alpha: 0.75,
+                        ),
                       ),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1,
@@ -921,50 +970,103 @@ class _CompactStat extends StatelessWidget {
   }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// Widget : Badge stat du jour (gardé pour compatibilité)
-// ══════════════════════════════════════════════════════════════════════════════
-
-class _StatBadge extends StatelessWidget {
-  final int count;
-  final String label;
-  final Color color;
-  final Color bgColor;
-  final IconData icon;
-
-  const _StatBadge({
-    required this.count,
-    required this.label,
-    required this.color,
-    required this.bgColor,
-    required this.icon,
-  });
+class _NoTerrainChip extends StatelessWidget {
+  const _NoTerrainChip();
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
       decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(14),
+        color: kBgSurface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: kBorder),
       ),
-      child: Column(
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: color),
-          const SizedBox(height: 4),
+          Icon(Icons.info_outline_rounded, size: 14, color: kTextSub),
+          SizedBox(width: 6),
           Text(
-            '$count',
+            'Aucun terrain disponible',
             style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+              color: kTextSub,
             ),
           ),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 9, color: kTextSub),
+        ],
+      ),
+    );
+  }
+}
+
+class _AvailabilityEmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String message;
+  final bool showCreateButton;
+
+  const _AvailabilityEmptyState({
+    required this.icon,
+    required this.title,
+    required this.message,
+    this.showCreateButton = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 44, 24, 0),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            width: 74,
+            height: 74,
+            decoration: const BoxDecoration(
+              color: kGreenLight,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: kGreen, size: 34),
           ),
+          const SizedBox(height: 18),
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: kTextPrim,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 13, height: 1.4, color: kTextSub),
+          ),
+          if (showCreateButton) ...[
+            const SizedBox(height: 20),
+            SizedBox(
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: () => Get.toNamed(Routes.terrainForm),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: kGreen,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                icon: const Icon(Icons.add_rounded, size: 20),
+                label: const Text(
+                  'Créer un terrain',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -984,7 +1086,7 @@ class _SlotDetailSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accentColor = controller.slotColor(slot.status);
-    final bgColor     = controller.slotBgColor(slot.status);
+    final bgColor = controller.slotBgColor(slot.status);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -1012,10 +1114,7 @@ class _SlotDetailSheet extends StatelessWidget {
           Container(
             width: 68,
             height: 68,
-            decoration: BoxDecoration(
-              color: bgColor,
-              shape: BoxShape.circle,
-            ),
+            decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
             child: Icon(
               controller.slotIcon(slot.status),
               color: accentColor,
@@ -1124,12 +1223,15 @@ class _SlotDetailSheet extends StatelessWidget {
                         style: OutlinedButton.styleFrom(
                           side: const BorderSide(color: kBorder),
                           shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16)),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
                         ),
                         child: const Text(
                           'Fermer',
                           style: TextStyle(
-                              color: kTextSub, fontWeight: FontWeight.w600),
+                            color: kTextSub,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     )
@@ -1144,13 +1246,15 @@ class _SlotDetailSheet extends StatelessWidget {
                               style: OutlinedButton.styleFrom(
                                 side: const BorderSide(color: kBorder),
                                 shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16)),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
                               ),
                               child: const Text(
                                 'Annuler',
                                 style: TextStyle(
-                                    color: kTextSub,
-                                    fontWeight: FontWeight.w600),
+                                  color: kTextSub,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                           ),
@@ -1166,13 +1270,12 @@ class _SlotDetailSheet extends StatelessWidget {
                                 Navigator.of(context).pop();
                               },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: slot.isBlocked
-                                    ? kGreen
-                                    : kRed,
+                                backgroundColor: slot.isBlocked ? kGreen : kRed,
                                 foregroundColor: Colors.white,
                                 elevation: 0,
                                 shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(16)),
+                                  borderRadius: BorderRadius.circular(16),
+                                ),
                               ),
                               icon: Icon(
                                 slot.isBlocked
@@ -1183,7 +1286,8 @@ class _SlotDetailSheet extends StatelessWidget {
                               label: Text(
                                 slot.isBlocked ? 'Débloquer' : 'Bloquer',
                                 style: const TextStyle(
-                                    fontWeight: FontWeight.w700),
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                           ),
@@ -1255,17 +1359,15 @@ class _BulkActionSheet extends StatelessWidget {
             iconBg: kRedLight,
             title: 'Bloquer tous les créneaux libres',
             subtitle: 'Personne ne pourra réserver aujourd\'hui',
-            onTap: () {
+            onTap: () async {
               HapticFeedback.mediumImpact();
-              for (final slot in controller.slots) {
-                if (slot.isAvailable) {
-                  controller.toggleBlock(slot.time);
-                }
-              }
+              final count = await controller.blockAllAvailable();
               Get.back();
               Get.snackbar(
                 'Créneaux bloqués',
-                'Tous les créneaux libres ont été bloqués',
+                count == 0
+                    ? 'Aucun créneau libre à bloquer'
+                    : '$count créneau${count > 1 ? 'x' : ''} bloqué${count > 1 ? 's' : ''}',
                 snackPosition: SnackPosition.BOTTOM,
                 backgroundColor: kBgCard,
                 colorText: kTextPrim,
@@ -1289,17 +1391,15 @@ class _BulkActionSheet extends StatelessWidget {
             iconBg: kGreenLight,
             title: 'Débloquer tous les créneaux',
             subtitle: 'Rendre disponibles les créneaux bloqués',
-            onTap: () {
+            onTap: () async {
               HapticFeedback.mediumImpact();
-              for (final slot in controller.slots) {
-                if (slot.isBlocked) {
-                  controller.toggleBlock(slot.time);
-                }
-              }
+              final count = await controller.unblockAllBlocked();
               Get.back();
               Get.snackbar(
                 'Créneaux débloqués',
-                'Tous les créneaux bloqués sont maintenant libres',
+                count == 0
+                    ? 'Aucun créneau bloqué à débloquer'
+                    : '$count créneau${count > 1 ? 'x' : ''} débloqué${count > 1 ? 's' : ''}',
                 snackPosition: SnackPosition.BOTTOM,
                 backgroundColor: kBgCard,
                 colorText: kTextPrim,
@@ -1325,12 +1425,15 @@ class _BulkActionSheet extends StatelessWidget {
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: kBorder),
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16)),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
                   ),
                   child: const Text(
                     'Fermer',
                     style: TextStyle(
-                        color: kTextSub, fontWeight: FontWeight.w600),
+                      color: kTextSub,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -1392,15 +1495,16 @@ class _BulkActionTile extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: kTextSub,
-                    ),
+                    style: const TextStyle(fontSize: 12, color: kTextSub),
                   ),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, color: kTextLight, size: 20),
+            const Icon(
+              Icons.chevron_right_rounded,
+              color: kTextLight,
+              size: 20,
+            ),
           ],
         ),
       ),
@@ -1426,14 +1530,15 @@ class _SlotsShimmer extends StatelessWidget {
         mainAxisSpacing: 10,
       ),
       itemCount: 15,
-      itemBuilder: (_, i) => Container(
-        decoration: BoxDecoration(
-          color: kBgSurface,
-          borderRadius: BorderRadius.circular(14),
-        ),
-      )
-          .animate(onPlay: (c) => c.repeat())
-          .shimmer(duration: 1200.ms, color: kBgCard),
+      itemBuilder: (_, i) =>
+          Container(
+                decoration: BoxDecoration(
+                  color: kBgSurface,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              )
+              .animate(onPlay: (c) => c.repeat())
+              .shimmer(duration: 1200.ms, color: kBgCard),
     );
   }
 }
