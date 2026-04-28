@@ -1,559 +1,1422 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:dotted_border/dotted_border.dart';
+import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/lottie_success_dialog.dart';
 import '../controllers/terrain_controller.dart';
+import '../../auth/controllers/auth_controller.dart';
 
-class TerrainFormScreen extends GetView<TerrainController> {
+class TerrainFormScreen extends StatefulWidget {
   const TerrainFormScreen({super.key});
+  @override
+  State<TerrainFormScreen> createState() => _TerrainFormScreenState();
+}
+
+class _TerrainFormScreenState extends State<TerrainFormScreen> {
+  late final TerrainController _ctrl;
+  late final bool _isEditing;
+
+  final _nameCtrl = TextEditingController();
+  final _addressCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  final _priceCtrl = TextEditingController();
+  final _dimCtrl = TextEditingController(text: '40 x 25 m');
+  final _openCtrl = TextEditingController(text: '08:00');
+  final _closeCtrl = TextEditingController(text: '23:00');
+  final _searchCtrl = TextEditingController();
+
+  final _images = <XFile>[].obs;
+  final _surface = 'Gazon synthétique'.obs;
+  final _zone = 'DAKAR'.obs;
+  final _capacities = <String>{}.obs;
+  final _mapCenter = Rx<LatLng>(const LatLng(14.6937, -17.4441));
+  final _mapCtrl = MapController();
+  final _searchResults = <Map<String, dynamic>>[].obs;
+  final _isSearching = false.obs;
+  final _isLocating = false.obs;
+  final _isSaving = false.obs;
+
+  final _equipments = <String, bool>{
+    'Éclairage': true,
+    'Vestiaires': true,
+    'Parking': false,
+    'Tribunes': false,
+    'Wi-Fi': false,
+    'Buvette': false,
+    'Douches': false,
+    'Arbitre': false,
+  }.obs;
+
+  static const _surfaces = [
+    'Gazon synthétique',
+    'Gazon naturel',
+    'Terre battue',
+  ];
+  static const _allCapacities = ['5v5', '7v7', '11v11'];
+
+  String get _mapboxToken => dotenv.env['MAPBOX_ACCESS_TOKEN']?.trim() ?? '';
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = Get.find<TerrainController>();
+    _isEditing = _ctrl.selectedTerrain.value != null;
+    final t = _ctrl.selectedTerrain.value;
+    if (t != null) {
+      _nameCtrl.text = t.name;
+      _addressCtrl.text = t.address;
+      _descCtrl.text = t.description ?? '';
+      _priceCtrl.text = '${t.pricePerHour}';
+      _zone.value = t.zone;
+
+      const validSurfaces = [
+        'Gazon synthétique',
+        'Gazon naturel',
+        'Terre battue',
+      ];
+      final surf = t.features.firstWhere(
+        (f) => validSurfaces.contains(f),
+        orElse: () => 'Gazon synthétique',
+      );
+      _surface.value = surf;
+
+      const caps = {'5v5', '7v7', '11v11'};
+      for (final f in t.features) {
+        if (caps.contains(f)) _capacities.add(f);
+        if (_equipments.containsKey(f)) _equipments[f] = true;
+      }
+
+      if (t.lat != null && t.lng != null) {
+        _mapCenter.value = LatLng(t.lat!, t.lng!);
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _addressCtrl.dispose();
+    _descCtrl.dispose();
+    _priceCtrl.dispose();
+    _dimCtrl.dispose();
+    _openCtrl.dispose();
+    _closeCtrl.dispose();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  // ── Recherche Nominatim ────────────────────────────────────────────────────
+  Future<void> _searchAddress(String query) async {
+    if (query.trim().length < 3) {
+      _searchResults.clear();
+      return;
+    }
+    _isSearching.value = true;
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/search'
+        '?q=${Uri.encodeComponent(query)}&format=json&limit=5&countrycodes=sn',
+      );
+      final res = await http.get(uri, headers: {'Accept-Language': 'fr'});
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as List;
+        _searchResults.value = data.cast<Map<String, dynamic>>();
+      }
+    } catch (_) {}
+    _isSearching.value = false;
+  }
+
+  void _selectResult(Map<String, dynamic> r) {
+    final lat = double.tryParse(r['lat'] ?? '') ?? 14.6937;
+    final lng = double.tryParse(r['lon'] ?? '') ?? -17.4441;
+    final pt = LatLng(lat, lng);
+    _mapCenter.value = pt;
+    _mapCtrl.move(pt, 15);
+    _addressCtrl.text = r['display_name'] ?? '';
+    _searchCtrl.clear();
+    _searchResults.clear();
+  }
+
+  Future<void> _reverseGeocode(LatLng point) async {
+    try {
+      final uri = Uri.parse(
+        'https://nominatim.openstreetmap.org/reverse'
+        '?lat=${point.latitude}&lon=${point.longitude}&format=json',
+      );
+      final res = await http.get(uri, headers: {'Accept-Language': 'fr'});
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        _addressCtrl.text = data['display_name'] ?? '';
+      }
+    } catch (_) {}
+  }
+
+  // ── Géolocalisation ────────────────────────────────────────────────────────
+  Future<void> _useCurrentLocation() async {
+    _isLocating.value = true;
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        Get.snackbar(
+          'GPS désactivé',
+          'Activez la localisation sur votre appareil',
+          backgroundColor: kBgCard,
+          colorText: kTextPrim,
+        );
+        await Geolocator.openLocationSettings();
+        _isLocating.value = false;
+        return;
+      }
+      LocationPermission perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+        if (perm == LocationPermission.denied) {
+          Get.snackbar(
+            'Permission refusée',
+            'Autorisation de localisation requise',
+            backgroundColor: kBgCard,
+            colorText: kTextPrim,
+          );
+          _isLocating.value = false;
+          return;
+        }
+      }
+      if (perm == LocationPermission.deniedForever) {
+        Get.snackbar(
+          'Permission bloquée',
+          'Activez la localisation dans les réglages',
+          backgroundColor: kBgCard,
+          colorText: kTextPrim,
+        );
+        await Geolocator.openAppSettings();
+        _isLocating.value = false;
+        return;
+      }
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 12),
+        ),
+      );
+      final pt = LatLng(pos.latitude, pos.longitude);
+      _mapCenter.value = pt;
+      _mapCtrl.move(pt, 16);
+      _addressCtrl.text = 'Votre position';
+      _searchCtrl.text = 'Votre position';
+      _searchResults.clear();
+    } catch (e) {
+      Get.snackbar(
+        'Erreur',
+        'Impossible d\'obtenir la position',
+        backgroundColor: kBgCard,
+        colorText: kTextPrim,
+      );
+    }
+    _isLocating.value = false;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final isEditing = controller.selectedTerrain.value != null;
-    final terrain = controller.selectedTerrain.value;
-
-    final nameCtrl = TextEditingController(text: terrain?.name ?? '');
-    final addressCtrl = TextEditingController(text: terrain?.address ?? '');
-    final priceCtrl = TextEditingController(
-        text: terrain != null ? '${terrain.price}' : '');
-    final capacityCtrl =
-        TextEditingController(text: terrain?.capacity ?? '');
-    final openCtrl = TextEditingController(text: '08:00');
-    final closeCtrl = TextEditingController(text: '23:00');
-
-    final surfaceObs = (terrain?.surface ?? 'Gazon synthetique').obs;
-    final equipments = <String, bool>{
-      'Eclairage': true,
-      'Vestiaires': true,
-      'Parking': false,
-      'Tribunes': false,
-      'Wi-Fi': false,
-      'Buvette': false,
-    }.obs;
-
     return Scaffold(
-      backgroundColor: kBg,
-      appBar: AppBar(
-        backgroundColor: kBgCard,
-        elevation: 0,
-        centerTitle: true,
-        leading: IconButton(
-          onPressed: controller.goBack,
-          icon: Icon(PhosphorIcons.arrowLeft(PhosphorIconsStyle.duotone),
-              color: kTextPrim, size: 20),
-        ),
-        title: Text(
-          isEditing ? 'Modifier le terrain' : 'Nouveau terrain',
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: kTextPrim,
+      backgroundColor: const Color(0xFFF5F0E8),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(64),
+        child: Container(
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: Color(0xFFF0EBE3))),
+          ),
+          child: AppBar(
+            backgroundColor: Colors.transparent,
+            elevation: 0,
+            leading: Center(
+              child: GestureDetector(
+                onTap: _ctrl.goBack,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: const BoxDecoration(
+                    color: Color(0xFFF0EBE3),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: Color(0xFF1A1A1A),
+                    size: 16,
+                  ),
+                ),
+              ),
+            ),
+            centerTitle: true,
+            title: Text(
+              _isEditing ? 'Modifier Terrain' : 'Nouveau Terrain',
+              style: const TextStyle(
+                fontFamily: 'Orbitron',
+                fontSize: 16,
+                fontWeight: FontWeight.w500,
+                color: Color(0xFF006F39),
+              ),
+            ),
           ),
         ),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(height: 1, color: kDivider),
-        ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 40),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
+            physics: const BouncingScrollPhysics(),
+            child: Column(
+              children: [
+                _buildPhotosSection().animate().fadeIn(duration: 350.ms),
+                const SizedBox(height: 20),
+                _buildInfoSection().animate().fadeIn(
+                  duration: 350.ms,
+                  delay: 50.ms,
+                ),
+                const SizedBox(height: 20),
+                _buildCapacitySection().animate().fadeIn(
+                  duration: 350.ms,
+                  delay: 100.ms,
+                ),
+                const SizedBox(height: 20),
+                _buildEquipmentsSection().animate().fadeIn(
+                  duration: 350.ms,
+                  delay: 150.ms,
+                ),
+                const SizedBox(height: 20),
+                _buildLocationSection().animate().fadeIn(
+                  duration: 350.ms,
+                  delay: 200.ms,
+                ),
+                const SizedBox(height: 20),
+              ],
+            ),
+          ),
+          // Bouton Fixe en bas
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                border: const Border(top: BorderSide(color: Color(0xFFF0EBE3))),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, -5),
+                  ),
+                ],
+              ),
+              child: _buildSaveButton(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── 1. Photos ──────────────────────────────────────────────────────────────
+  Widget _buildPhotosSection() {
+    final existingImage = _ctrl.selectedTerrain.value?.displayImage ?? '';
+
+    return Obx(() {
+      final hasLocalImage = _images.isNotEmpty;
+      final hasExistingImage = existingImage.isNotEmpty;
+      final hasPreview = hasLocalImage || hasExistingImage;
+
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: const Color(0xFFE5E0D8)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Section 1 : Photo ──
-            _buildSectionTitle(
-                    'Photo du terrain',
-                    PhosphorIcons.image(PhosphorIconsStyle.duotone))
-                .animate()
-                .fadeIn(duration: 400.ms, delay: 0.ms)
-                .slideY(begin: 0.1, end: 0, duration: 400.ms),
-            const SizedBox(height: 12),
-            _buildPhotoSection(isEditing, terrain)
-                .animate()
-                .fadeIn(duration: 500.ms, delay: 100.ms)
-                .slideY(begin: 0.05, end: 0, duration: 500.ms),
-            const SizedBox(height: 28),
-
-            // ── Section 2 : Informations ──
-            _buildSectionTitle(
-                    'Informations generales',
-                    PhosphorIcons.info(PhosphorIconsStyle.duotone))
-                .animate()
-                .fadeIn(duration: 400.ms, delay: 150.ms)
-                .slideY(begin: 0.1, end: 0, duration: 400.ms),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: kBgCard,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: kCardShadow,
-              ),
-              child: Column(
-                children: [
-                  _FormField(
-                    label: 'Nom du terrain',
-                    ctrl: nameCtrl,
-                    hint: 'Ex: Terrain Alpha',
-                    icon: PhosphorIcons.courtBasketball(
-                        PhosphorIconsStyle.duotone),
+            Row(
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE8F5E9),
+                    borderRadius: BorderRadius.circular(12),
                   ),
-                  const SizedBox(height: 16),
-                  _FormField(
-                    label: 'Adresse',
-                    ctrl: addressCtrl,
-                    hint: 'Ex: Cite Keur Gorgui, Dakar',
-                    icon:
-                        PhosphorIcons.mapPin(PhosphorIconsStyle.duotone),
+                  child: const Icon(
+                    PhosphorIconsLight.imageSquare,
+                    color: Color(0xFF006F39),
+                    size: 19,
                   ),
-                  const SizedBox(height: 16),
-                  Row(
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Text(
+                    'Photos du terrain',
+                    style: TextStyle(
+                      color: Color(0xFF1A1A1A),
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                _IconPillButton(
+                  icon: PhosphorIconsLight.plus,
+                  label: hasPreview ? 'Ajouter' : 'Choisir',
+                  onTap: _pickImages,
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            GestureDetector(
+              onTap: _pickImages,
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Stack(
+                    fit: StackFit.expand,
                     children: [
-                      Expanded(
-                        child: _FormField(
-                          label: 'Prix / heure',
-                          ctrl: priceCtrl,
-                          hint: '8000',
-                          icon: PhosphorIcons.currencyCircleDollar(
-                              PhosphorIconsStyle.duotone),
-                          keyboardType: TextInputType.number,
-                          suffix: 'F CFA',
+                      if (hasLocalImage)
+                        Image.file(File(_images.first.path), fit: BoxFit.cover)
+                      else if (hasExistingImage)
+                        Image.network(
+                          existingImage,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) =>
+                              _PhotoEmptyState(onTap: _pickImages),
+                        )
+                      else
+                        _PhotoEmptyState(onTap: _pickImages),
+                      if (hasPreview) ...[
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.0),
+                                Colors.black.withValues(alpha: 0.42),
+                              ],
+                            ),
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _FormField(
-                          label: 'Capacite',
-                          ctrl: capacityCtrl,
-                          hint: '5v5',
-                          icon: PhosphorIcons.users(
-                              PhosphorIconsStyle.duotone),
+                        Positioned(
+                          left: 12,
+                          right: 12,
+                          bottom: 12,
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withValues(alpha: 0.92),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Text(
+                                  'Photo principale',
+                                  style: TextStyle(
+                                    color: Color(0xFF1A1A1A),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                              const Spacer(),
+                              Container(
+                                width: 34,
+                                height: 34,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF006F39),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  PhosphorIconsLight.cameraPlus,
+                                  color: Colors.white,
+                                  size: 18,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
-                ],
+                ),
               ),
-            )
-                .animate()
-                .fadeIn(duration: 500.ms, delay: 200.ms)
-                .slideY(begin: 0.05, end: 0, duration: 500.ms),
-            const SizedBox(height: 28),
+            ),
+            if (_images.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 72,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.only(bottom: 2),
+                  itemCount: _images.length + 1,
+                  separatorBuilder: (context, index) =>
+                      const SizedBox(width: 10),
+                  itemBuilder: (context, index) {
+                    if (index == _images.length) {
+                      return _AddPhotoTile(onTap: _pickImages);
+                    }
 
-            // ── Section 3 : Surface ──
-            _buildSectionTitle(
-                    'Type de surface',
-                    PhosphorIcons.plant(PhosphorIconsStyle.duotone))
-                .animate()
-                .fadeIn(duration: 400.ms, delay: 300.ms)
-                .slideY(begin: 0.1, end: 0, duration: 400.ms),
-            const SizedBox(height: 12),
-            Obx(() => _buildSurfaceChips(surfaceObs))
-                .animate()
-                .fadeIn(duration: 500.ms, delay: 350.ms)
-                .slideY(begin: 0.05, end: 0, duration: 500.ms),
-            const SizedBox(height: 28),
+                    return _PhotoThumb(
+                      file: File(_images[index].path),
+                      isPrimary: index == 0,
+                      onRemove: () => _images.removeAt(index),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    });
+  }
 
-            // ── Section 4 : Horaires ──
-            _buildSectionTitle(
-                    'Horaires d\'ouverture',
-                    PhosphorIcons.clock(PhosphorIconsStyle.duotone))
-                .animate()
-                .fadeIn(duration: 400.ms, delay: 400.ms)
-                .slideY(begin: 0.1, end: 0, duration: 400.ms),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(20),
+  Future<void> _pickImages() async {
+    final picker = ImagePicker();
+    final images = await picker.pickMultiImage();
+    if (images.isNotEmpty) {
+      _images.addAll(images);
+    }
+  }
+
+  static const _zones = {
+    'DAKAR': 'Dakar',
+    'GUEEDIAWAYE': 'Guédiawaye',
+    'PIKINE': 'Pikine',
+    'RUFISQUE': 'Rufisque',
+  };
+
+  // ── 2. Informations ──────────────────────────────────────────────────────
+  Widget _buildInfoSection() => _Card(
+    title: 'Informations',
+    icon: PhosphorIconsLight.fileText,
+    child: Column(
+      children: [
+        _Field(
+          label: 'Nom du terrain *',
+          ctrl: _nameCtrl,
+          hint: 'Ex: Terrain Synthétique A',
+          icon: PhosphorIconsLight.pen,
+        ),
+        const SizedBox(height: 16),
+        // Zone
+        _buildDropdown(
+          label: 'Zone *',
+          obs: _zone,
+          items: _zones.entries
+              .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+              .toList(),
+        ),
+        const SizedBox(height: 16),
+        // Prix
+        _Field(
+          label: 'Prix par heure (XOF) *',
+          ctrl: _priceCtrl,
+          hint: 'Ex: 15000',
+          icon: PhosphorIconsLight.currencyDollar,
+          keyboardType: TextInputType.number,
+        ),
+        const SizedBox(height: 16),
+        // Description
+        _MultilineField(
+          label: 'Description',
+          ctrl: _descCtrl,
+          hint: 'Décrivez votre terrain (optionnel)…',
+        ),
+        const SizedBox(height: 16),
+        // Surface
+        _buildDropdown(
+          label: 'Type de surface',
+          obs: _surface,
+          items: _surfaces
+              .map(
+                (s) => DropdownMenuItem(
+                  value: s,
+                  child: Row(
+                    children: [
+                      const Icon(
+                        PhosphorIconsLight.leaf,
+                        size: 16,
+                        color: Color(0xFF006F39),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(s),
+                    ],
+                  ),
+                ),
+              )
+              .toList(),
+        ),
+      ],
+    ),
+  );
+
+  Widget _buildDropdown({
+    required String label,
+    required RxString obs,
+    required List<DropdownMenuItem<String>> items,
+  }) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.w500,
+          color: Color(0xFF6B7280),
+        ),
+      ),
+      const SizedBox(height: 6),
+      Obx(
+        () => Container(
+          height: 48,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E0D8)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: obs.value,
+              isExpanded: true,
+              icon: const Icon(
+                PhosphorIconsLight.caretDown,
+                color: Color(0xFF006F39),
+                size: 16,
+              ),
+              style: const TextStyle(
+                color: Color(0xFF1A1A1A),
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+              items: items,
+              onChanged: (v) {
+                if (v != null) obs.value = v;
+              },
+            ),
+          ),
+        ),
+      ),
+    ],
+  );
+
+  // ── 3. Formats de jeu — Chips ─────────────────────────────────────────────
+  Widget _buildCapacitySection() => _Card(
+    title: 'Formats de jeu',
+    icon: PhosphorIconsLight.users,
+    child: Obx(
+      () => Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: _allCapacities.map((c) {
+          final sel = _capacities.contains(c);
+          return GestureDetector(
+            onTap: () {
+              if (sel) {
+                _capacities.remove(c);
+              } else {
+                _capacities.add(c);
+              }
+            },
+            child: AnimatedContainer(
+              duration: 200.ms,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               decoration: BoxDecoration(
-                color: kBgCard,
-                borderRadius: BorderRadius.circular(18),
-                boxShadow: kCardShadow,
+                color: sel ? const Color(0xFF006F39) : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: sel
+                      ? const Color(0xFF006F39)
+                      : const Color(0xFFE5E0D8),
+                ),
+              ),
+              child: Text(
+                c,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: sel ? Colors.white : const Color(0xFF6B7280),
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    ),
+  );
+
+  // ── 4. Équipements — Grid ────────────────────────────────────────────────
+  Widget _buildEquipmentsSection() => _Card(
+    title: 'Équipements inclus',
+    icon: PhosphorIconsLight.shieldCheck,
+    child: Obx(() {
+      final icons = {
+        'Éclairage': PhosphorIconsLight.lightbulb,
+        'Vestiaires': PhosphorIconsLight.shirtFolded,
+        'Ballon': PhosphorIconsLight.soccerBall,
+        'Caméra': PhosphorIconsLight.videoCamera,
+        'Wifi': PhosphorIconsLight.wifiHigh,
+        'Parking': PhosphorIconsLight.park,
+        'Tribunes': PhosphorIconsLight.chair,
+        'Buvette': PhosphorIconsLight.coffee,
+        'Douches': PhosphorIconsLight.shower,
+        'Arbitre': PhosphorIconsLight.flag,
+      };
+
+      return GridView.count(
+        crossAxisCount: 2,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 3.5,
+        children: _equipments.entries.map((e) {
+          final on = e.value;
+          final icon = icons[e.key] ?? PhosphorIconsLight.checks;
+          return GestureDetector(
+            onTap: () => _equipments[e.key] = !on,
+            child: AnimatedContainer(
+              duration: 200.ms,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(
+                color: on ? const Color(0xFFE8F5E9) : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: on ? const Color(0xFF006F39) : const Color(0xFFE5E0D8),
+                ),
               ),
               child: Row(
                 children: [
-                  Expanded(
-                    child: _FormField(
-                      label: 'Ouverture',
-                      ctrl: openCtrl,
-                      hint: '08:00',
-                      icon:
-                          PhosphorIcons.sun(PhosphorIconsStyle.duotone),
-                    ),
+                  Icon(
+                    icon,
+                    color: on
+                        ? const Color(0xFF006F39)
+                        : const Color(0xFF9CA3AF),
+                    size: 18,
                   ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Container(
-                      margin: const EdgeInsets.only(top: 20),
-                      width: 24,
-                      height: 2,
-                      color: kTextLight,
-                    ),
-                  ),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: _FormField(
-                      label: 'Fermeture',
-                      ctrl: closeCtrl,
-                      hint: '23:00',
-                      icon: PhosphorIcons.moon(
-                          PhosphorIconsStyle.duotone),
+                    child: Text(
+                      e.key,
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: on ? FontWeight.w600 : FontWeight.w500,
+                        color: on
+                            ? const Color(0xFF006F39)
+                            : const Color(0xFF6B7280),
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],
               ),
-            )
-                .animate()
-                .fadeIn(duration: 500.ms, delay: 450.ms)
-                .slideY(begin: 0.05, end: 0, duration: 500.ms),
-            const SizedBox(height: 28),
-
-            // ── Section 5 : Equipements ──
-            _buildSectionTitle(
-                    'Equipements',
-                    PhosphorIcons.wrench(PhosphorIconsStyle.duotone))
-                .animate()
-                .fadeIn(duration: 400.ms, delay: 500.ms)
-                .slideY(begin: 0.1, end: 0, duration: 400.ms),
-            const SizedBox(height: 12),
-            Obx(() => _buildEquipmentGrid(equipments))
-                .animate()
-                .fadeIn(duration: 500.ms, delay: 550.ms)
-                .slideY(begin: 0.05, end: 0, duration: 500.ms),
-            const SizedBox(height: 36),
-
-            // ── Bouton enregistrer ──
-            SizedBox(
-              width: double.infinity,
-              height: 56,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  Get.dialog(
-                    LottieSuccessDialog(
-                      message: isEditing
-                          ? 'Terrain modifie !'
-                          : 'Terrain cree !',
-                      subtitle: isEditing
-                          ? 'Les modifications ont ete enregistrees'
-                          : 'Votre nouveau terrain est pret',
-                    ),
-                    barrierDismissible: false,
-                  );
-                  Future.delayed(const Duration(seconds: 2), () {
-                    controller.goBack();
-                  });
-                },
-                icon: Icon(
-                  isEditing
-                      ? PhosphorIcons.check(PhosphorIconsStyle.duotone)
-                      : PhosphorIcons.plus(PhosphorIconsStyle.duotone),
-                  color: Colors.white,
-                  size: 22,
-                ),
-                label: Text(
-                  isEditing ? 'Enregistrer' : 'Creer le terrain',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: kGreen,
-                  foregroundColor: Colors.white,
-                  elevation: 4,
-                  shadowColor: kGreen.withValues(alpha: 0.4),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-              ),
-            )
-                .animate()
-                .fadeIn(duration: 500.ms, delay: 600.ms)
-                .slideY(begin: 0.1, end: 0, duration: 500.ms),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ── Section title ──────────────────────────────────────────────────────────
-  Widget _buildSectionTitle(String text, IconData icon) {
-    return Row(
-      children: [
-        Icon(icon, color: kGreen, size: 20),
-        const SizedBox(width: 8),
-        Text(
-          text,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: kTextPrim,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ── Photo section avec dotted border ──────────────────────────────────────
-  Widget _buildPhotoSection(bool isEditing, TerrainModel? terrain) {
-    if (isEditing && terrain != null && terrain.isAsset) {
-      // Preview de l'image existante
-      return Stack(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(18),
-            child: Image.asset(
-              terrain.imageUrl,
-              height: 180,
-              width: double.infinity,
-              fit: BoxFit.cover,
             ),
-          ),
-          // Overlay avec bouton changer
-          Positioned(
-            bottom: 12,
-            right: 12,
-            child: GestureDetector(
-              onTap: () {},
+          );
+        }).toList(),
+      );
+    }),
+  );
+
+  // ── 5. Localisation — Map et Recherche ────────────────────────────────────
+  Widget _buildLocationSection() => _Card(
+    title: 'Localisation',
+    icon: PhosphorIconsLight.mapPin,
+    child: Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                height: 48,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.6),
-                  borderRadius: BorderRadius.circular(10),
+                  color: const Color(0xFFF0EBE3),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: const Color(0xFFE5E0D8)),
                 ),
                 child: Row(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                        PhosphorIcons.camera(PhosphorIconsStyle.duotone),
-                        color: Colors.white,
-                        size: 16),
-                    const SizedBox(width: 6),
-                    const Text(
-                      'Changer',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
+                    Expanded(
+                      child: TextField(
+                        controller: _searchCtrl,
+                        onChanged: _searchAddress,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Color(0xFF1A1A1A),
+                        ),
+                        decoration: const InputDecoration(
+                          hintText: 'Rechercher une adresse...',
+                          hintStyle: TextStyle(
+                            color: Color(0xFF9CA3AF),
+                            fontSize: 13,
+                          ),
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
             ),
+            const SizedBox(width: 8),
+            Obx(
+              () => GestureDetector(
+                onTap: _isLocating.value ? null : _useCurrentLocation,
+                child: Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF006F39),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: _isLocating.value
+                      ? const Padding(
+                          padding: EdgeInsets.all(14),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(
+                          PhosphorIconsLight.gps,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                ),
+              ),
+            ),
+          ],
+        ),
+
+        // Résultats de recherche Nominatim
+        Obx(() {
+          if (_searchResults.isEmpty) return const SizedBox.shrink();
+          return Container(
+            margin: const EdgeInsets.only(top: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE5E0D8)),
+            ),
+            child: Column(
+              children: _searchResults
+                  .map(
+                    (r) => ListTile(
+                      dense: true,
+                      leading: const Icon(PhosphorIconsLight.mapPin, size: 14),
+                      title: Text(
+                        r['display_name'] ?? '',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      onTap: () => _selectResult(r),
+                    ),
+                  )
+                  .toList(),
+            ),
+          );
+        }),
+
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _addressCtrl,
+          builder: (context, value, child) {
+            final address = value.text.trim();
+            if (address.isEmpty) return const SizedBox.shrink();
+
+            return Obx(
+              () => Container(
+                margin: const EdgeInsets.only(top: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F5E9),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFCDE8D4)),
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF006F39),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: const Icon(
+                        PhosphorIconsLight.mapPin,
+                        color: Colors.white,
+                        size: 17,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            address,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: Color(0xFF1A1A1A),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${_mapCenter.value.latitude.toStringAsFixed(5)}, ${_mapCenter.value.longitude.toStringAsFixed(5)}',
+                            style: const TextStyle(
+                              color: Color(0xFF006F39),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+
+        const SizedBox(height: 12),
+        // Mini Map
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            height: 160,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF0EBE3),
+              border: Border.all(color: const Color(0xFFE5E0D8)),
+            ),
+            child: Stack(
+              children: [
+                Obx(
+                  () => FlutterMap(
+                    mapController: _mapCtrl,
+                    options: MapOptions(
+                      initialCenter: _mapCenter.value,
+                      initialZoom: 15,
+                      onTap: (_, point) {
+                        _mapCenter.value = point;
+                        _reverseGeocode(point);
+                      },
+                      onPositionChanged: (camera, hasGesture) {
+                        if (hasGesture) _mapCenter.value = camera.center;
+                      },
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate: _mapboxToken.isEmpty
+                            ? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
+                            : 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=$_mapboxToken',
+                        userAgentPackageName: 'com.minifoot.owner',
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: _mapCenter.value,
+                            width: 80,
+                            height: 80,
+                            child: Center(
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  Container(
+                                        width: 40,
+                                        height: 40,
+                                        decoration: BoxDecoration(
+                                          color: const Color(
+                                            0xFF006F39,
+                                          ).withAlpha(50),
+                                          shape: BoxShape.circle,
+                                        ),
+                                      )
+                                      .animate(onPlay: (c) => c.repeat())
+                                      .scale(
+                                        begin: const Offset(1, 1),
+                                        end: const Offset(2.5, 2.5),
+                                        duration: 1500.ms,
+                                        curve: Curves.easeOut,
+                                      )
+                                      .fadeOut(),
+                                  Container(
+                                    width: 14,
+                                    height: 14,
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF006F39),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white,
+                                        width: 2.5,
+                                      ),
+                                      boxShadow: const [
+                                        BoxShadow(
+                                          color: Colors.black26,
+                                          blurRadius: 4,
+                                          offset: Offset(0, 2),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const IgnorePointer(
+                  child: Center(
+                    child: Padding(
+                      padding: EdgeInsets.only(top: 100),
+                      child: Text(
+                        'Glissez la carte pour affiner la position',
+                        style: TextStyle(
+                          color: Color(0xFF9CA3AF),
+                          fontSize: 10,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
+      ],
+    ),
+  );
+
+  // ── 6. Bouton Enregistrer ────────────────────────────────────────────────
+  Widget _buildSaveButton() => Obx(
+    () => SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _isSaving.value ? null : _onSave,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFF006F39),
+          disabledBackgroundColor: const Color(0xFF006F39).withAlpha(120),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 0,
+        ),
+        child: _isSaving.value
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.white,
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(PhosphorIconsLight.floppyDisk, size: 20),
+                  SizedBox(width: 10),
+                  Text(
+                    'Enregistrer le terrain',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    ),
+  );
+
+  Future<void> _onSave() async {
+    final name = _nameCtrl.text.trim();
+    if (name.isEmpty) {
+      Get.snackbar(
+        'Champ requis',
+        'Veuillez saisir un nom de terrain',
+        snackPosition: SnackPosition.TOP,
       );
+      return;
     }
 
-    // Zone d'upload avec bordure pointillee
+    final price = int.tryParse(_priceCtrl.text.trim());
+    if (price == null || price <= 0) {
+      Get.snackbar(
+        'Champ requis',
+        'Veuillez saisir un prix valide (en XOF)',
+        snackPosition: SnackPosition.TOP,
+      );
+      return;
+    }
+
+    final address = _addressCtrl.text.trim();
+    if (address.isEmpty) {
+      Get.snackbar(
+        'Champ requis',
+        'Veuillez sélectionner une adresse sur la carte',
+        snackPosition: SnackPosition.TOP,
+      );
+      return;
+    }
+
+    _isSaving.value = true;
+    try {
+      final features = [
+        _surface.value,
+        ..._capacities,
+        ..._equipments.entries.where((e) => e.value).map((e) => e.key),
+      ];
+
+      final authCtrl = Get.find<AuthController>();
+
+      await _ctrl.saveTerrain(
+        name: name,
+        address: address,
+        zone: _zone.value,
+        pricePerHour: price,
+        lat: _mapCenter.value.latitude,
+        lng: _mapCenter.value.longitude,
+        description: _descCtrl.text.trim().isEmpty
+            ? null
+            : _descCtrl.text.trim(),
+        features: features,
+        images: _images.map((x) => File(x.path)).toList(),
+        managerId: authCtrl.user.value?.id,
+      );
+
+      Get.dialog(
+        LottieSuccessDialog(
+          message: _isEditing ? 'Terrain modifié !' : 'Terrain créé !',
+          subtitle: _isEditing
+              ? 'Les modifications ont été enregistrées'
+              : 'Votre nouveau terrain est prêt',
+        ),
+        barrierDismissible: false,
+      );
+      Future.delayed(const Duration(seconds: 2), () {
+        if (Get.isDialogOpen ?? false) {
+          Get.back();
+        }
+        _ctrl.goBack();
+      });
+    } catch (e) {
+      final message = e.toString().replaceFirst('Exception: ', '');
+      Get.snackbar('Erreur', message, snackPosition: SnackPosition.TOP);
+    } finally {
+      _isSaving.value = false;
+    }
+  }
+}
+
+// ─── Widgets de structure ──────────────────────────────────────────────────
+
+class _IconPillButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _IconPillButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {
-        Get.snackbar(
-          'Photo',
-          'Fonctionnalite camera a connecter',
-          backgroundColor: kBgCard,
-          colorText: kTextPrim,
-          snackPosition: SnackPosition.BOTTOM,
-          margin: const EdgeInsets.all(16),
-          borderRadius: 14,
-        );
-      },
+      onTap: onTap,
+      child: Container(
+        height: 36,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          color: const Color(0xFF006F39),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: Colors.white, size: 15),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PhotoEmptyState extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _PhotoEmptyState({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
       child: DottedBorder(
         borderType: BorderType.RRect,
-        radius: const Radius.circular(18),
-        dashPattern: const [8, 4],
-        color: kGreen.withValues(alpha: 0.5),
-        strokeWidth: 2,
+        radius: const Radius.circular(16),
+        dashPattern: const [7, 5],
+        color: const Color(0xFF006F39).withAlpha(110),
+        strokeWidth: 1.5,
         child: Container(
-          height: 170,
           width: double.infinity,
-          decoration: BoxDecoration(
-            color: kGreenLight.withValues(alpha: 0.3),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: kGreenLight,
-                  borderRadius: BorderRadius.circular(16),
+          color: const Color(0xFFE8F5E9),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.05),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: const Icon(
+                    PhosphorIconsLight.cameraPlus,
+                    color: Color(0xFF006F39),
+                    size: 25,
+                  ),
                 ),
-                child: Icon(
-                    PhosphorIcons.cameraPlus(PhosphorIconsStyle.duotone),
-                    color: kGreen,
-                    size: 28),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Ajouter une photo',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: kGreen,
+                const SizedBox(height: 10),
+                const Text(
+                  'Ajouter une photo',
+                  style: TextStyle(
+                    color: Color(0xFF006F39),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'JPG, PNG ou WEBP (max 5 Mo)',
-                style: TextStyle(fontSize: 12, color: kTextSub),
-              ),
-            ],
+                const SizedBox(height: 2),
+                const Text(
+                  'JPG ou PNG',
+                  style: TextStyle(color: Color(0xFF6B7280), fontSize: 11),
+                ),
+              ],
+            ),
           ),
         ),
       ),
     );
   }
+}
 
-  // ── Surface chips selectables ─────────────────────────────────────────────
-  Widget _buildSurfaceChips(RxString surfaceObs) {
-    final surfaces = [
-      {
-        'label': 'Gazon synthetique',
-        'icon': PhosphorIcons.plant(PhosphorIconsStyle.duotone)
-      },
-      {
-        'label': 'Gazon naturel',
-        'icon': PhosphorIcons.tree(PhosphorIconsStyle.duotone)
-      },
-      {
-        'label': 'Terre battue',
-        'icon': PhosphorIcons.mountains(PhosphorIconsStyle.duotone)
-      },
-    ];
+class _AddPhotoTile extends StatelessWidget {
+  final VoidCallback onTap;
 
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: surfaces.map((s) {
-        final isSelected = surfaceObs.value == s['label'];
-        return GestureDetector(
-          onTap: () => surfaceObs.value = s['label'] as String,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: isSelected ? kGreen : kBgCard,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(
-                color: isSelected ? kGreen : kBorder,
-                width: isSelected ? 2 : 1,
-              ),
-              boxShadow: isSelected ? kCardShadow : null,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  s['icon'] as IconData,
-                  color: isSelected ? Colors.white : kTextSub,
-                  size: 18,
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  s['label'] as String,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: isSelected ? Colors.white : kTextPrim,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
+  const _AddPhotoTile({required this.onTap});
 
-  // ── Equipment grid ────────────────────────────────────────────────────────
-  Widget _buildEquipmentGrid(RxMap<String, bool> equipments) {
-    final icons = {
-      'Eclairage': PhosphorIcons.lightbulb(PhosphorIconsStyle.duotone),
-      'Vestiaires': PhosphorIcons.tShirt(PhosphorIconsStyle.duotone),
-      'Parking': PhosphorIcons.car(PhosphorIconsStyle.duotone),
-      'Tribunes': PhosphorIcons.armchair(PhosphorIconsStyle.duotone),
-      'Wi-Fi': PhosphorIcons.wifiHigh(PhosphorIconsStyle.duotone),
-      'Buvette': PhosphorIcons.coffee(PhosphorIconsStyle.duotone),
-    };
-
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: equipments.entries.map((e) {
-        final isActive = e.value;
-        return GestureDetector(
-          onTap: () => equipments[e.key] = !isActive,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding:
-                const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: isActive ? kGreenLight : kBgCard,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: isActive ? kGreen : kBorder,
-              ),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  icons[e.key] ??
-                      PhosphorIcons.check(PhosphorIconsStyle.duotone),
-                  color: isActive ? kGreen : kTextLight,
-                  size: 18,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  e.key,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: isActive ? kGreen : kTextSub,
-                  ),
-                ),
-                if (isActive) ...[
-                  const SizedBox(width: 4),
-                  Icon(
-                      PhosphorIcons.checkCircle(
-                          PhosphorIconsStyle.duotone),
-                      color: kGreen,
-                      size: 14),
-                ],
-              ],
-            ),
-          ),
-        );
-      }).toList(),
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 70,
+        height: 70,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF0EBE3),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE5E0D8)),
+        ),
+        child: const Icon(
+          PhosphorIconsLight.plus,
+          color: Color(0xFF006F39),
+          size: 22,
+        ),
+      ),
     );
   }
 }
 
-// ─── Form field reutilisable ────────────────────────────────────────────────
+class _PhotoThumb extends StatelessWidget {
+  final File file;
+  final bool isPrimary;
+  final VoidCallback onRemove;
 
-class _FormField extends StatelessWidget {
+  const _PhotoThumb({
+    required this.file,
+    required this.isPrimary,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: 70,
+          height: 70,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isPrimary
+                  ? const Color(0xFF006F39)
+                  : const Color(0xFFE5E0D8),
+              width: isPrimary ? 2 : 1,
+            ),
+            image: DecorationImage(image: FileImage(file), fit: BoxFit.cover),
+          ),
+        ),
+        Positioned(
+          top: -7,
+          right: -7,
+          child: GestureDetector(
+            onTap: onRemove,
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEF4444),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.18),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+              child: const Icon(Icons.close, color: Colors.white, size: 12),
+            ),
+          ),
+        ),
+        if (isPrimary)
+          Positioned(
+            left: 6,
+            bottom: 6,
+            child: Container(
+              width: 18,
+              height: 18,
+              decoration: const BoxDecoration(
+                color: Color(0xFF006F39),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check, color: Colors.white, size: 12),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _Card extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final Widget child;
+
+  const _Card({required this.title, required this.icon, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE5E0D8)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 20, color: const Color(0xFF9CA3AF)),
+              const SizedBox(width: 8),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+class _Field extends StatelessWidget {
   final String label;
   final TextEditingController ctrl;
   final String hint;
   final IconData icon;
-  final TextInputType keyboardType;
-  final String? suffix;
+  final TextInputType? keyboardType;
 
-  const _FormField({
+  const _Field({
     required this.label,
     required this.ctrl,
     required this.hint,
     required this.icon,
-    this.keyboardType = TextInputType.text,
-    this.suffix,
+    this.keyboardType,
   });
 
   @override
@@ -565,40 +1428,100 @@ class _FormField extends StatelessWidget {
           label,
           style: const TextStyle(
             fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: kTextSub,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF6B7280),
           ),
         ),
         const SizedBox(height: 6),
-        TextField(
-          controller: ctrl,
-          keyboardType: keyboardType,
-          style: const TextStyle(color: kTextPrim, fontSize: 14),
-          decoration: InputDecoration(
-            hintText: hint,
-            hintStyle: const TextStyle(color: kTextLight, fontSize: 14),
-            prefixIcon: Icon(icon, color: kTextSub, size: 20),
-            suffixText: suffix,
-            suffixStyle: const TextStyle(
-              color: kTextSub,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-            filled: true,
-            fillColor: kBgSurface,
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: kGreen, width: 1.5),
+        Container(
+          height: 48,
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E0D8)),
+          ),
+          child: Row(
+            children: [
+              const SizedBox(width: 14),
+              Icon(icon, color: const Color(0xFF006F39), size: 18),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: ctrl,
+                  keyboardType: keyboardType,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Color(0xFF1A1A1A),
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: hint,
+                    hintStyle: const TextStyle(
+                      color: Color(0xFF9CA3AF),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                    ),
+                    border: InputBorder.none,
+                    enabledBorder: InputBorder.none,
+                    focusedBorder: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MultilineField extends StatelessWidget {
+  final String label;
+  final TextEditingController ctrl;
+  final String hint;
+
+  const _MultilineField({
+    required this.label,
+    required this.ctrl,
+    required this.hint,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF6B7280),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFF0EBE3),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFE5E0D8)),
+          ),
+          child: TextField(
+            controller: ctrl,
+            maxLines: 3,
+            style: const TextStyle(fontSize: 14, color: Color(0xFF1A1A1A)),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: const TextStyle(
+                color: Color(0xFF9CA3AF),
+                fontSize: 13,
+              ),
+              border: InputBorder.none,
+              enabledBorder: InputBorder.none,
+              focusedBorder: InputBorder.none,
+              contentPadding: const EdgeInsets.all(16),
             ),
           ),
         ),

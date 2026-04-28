@@ -1,121 +1,211 @@
 import 'package:get/get.dart';
+import '../../../core/services/auth_service.dart';
+import '../../../core/services/revenue_service.dart';
+import '../../../routes/app_routes.dart';
 
 class TransactionModel {
   final String id;
+  final DateTime rawDate;
   final String date;
   final String client;
   final String terrain;
   final int amount;
-  final String method; // Wave / Orange Money / Free Money
+  final String method; // Wave / Orange Money / Yas Money
   final String status; // paid / pending / failed
+  final String timeSlot; // ex: "16h00 - 17h00"
+  final String reference;
 
   TransactionModel({
     required this.id,
+    required this.rawDate,
     required this.date,
     required this.client,
     required this.terrain,
     required this.amount,
     required this.method,
     required this.status,
+    this.timeSlot = '',
+    this.reference = '',
   });
+
+  factory TransactionModel.fromOwnerTransaction(OwnerTransaction tx) {
+    return TransactionModel(
+      id: tx.id,
+      rawDate: tx.date,
+      date: tx.dateLabel,
+      client: tx.client,
+      terrain: tx.terrain,
+      amount: tx.amount,
+      method: tx.method,
+      status: tx.status,
+      timeSlot: tx.timeSlot,
+      reference: tx.reference,
+    );
+  }
 }
 
 class PaymentsController extends GetxController {
-  final totalRevenue  = 485000.obs;
-  final monthlyRevenue = 145000.obs;
-  final pendingAmount  = 24000.obs;
+  final _service = RevenueService();
+  final _authService = AuthService();
+
+  final totalRevenue = 0.obs;
+  final monthlyRevenue = 0.obs;
+  final pendingAmount = 0.obs;
+  final payoutMethod = RxnString();
+  final payoutPhone = RxnString();
 
   final transactions = <TransactionModel>[].obs;
   final selectedFilter = 'all'.obs;
+  final selectedPeriod = 'month'.obs; // day / week / month
   final isLoading = false.obs;
+  final errorMessage = ''.obs;
 
   @override
   void onInit() {
     super.onInit();
-    _loadMockTransactions();
+    loadPayments();
   }
 
-  void _loadMockTransactions() {
-    transactions.value = [
-      TransactionModel(
-        id: '1',
-        date: '22 Mar 2026',
-        client: 'Mamadou Diallo',
-        terrain: 'Terrain Alpha',
-        amount: 8000,
-        method: 'Wave',
-        status: 'paid',
-      ),
-      TransactionModel(
-        id: '2',
-        date: '22 Mar 2026',
-        client: 'Ibrahima Ndiaye',
-        terrain: 'Terrain Beta',
-        amount: 10000,
-        method: 'Orange Money',
-        status: 'pending',
-      ),
-      TransactionModel(
-        id: '3',
-        date: '21 Mar 2026',
-        client: 'Ousmane Sow',
-        terrain: 'Terrain Alpha',
-        amount: 8000,
-        method: 'Free Money',
-        status: 'paid',
-      ),
-      TransactionModel(
-        id: '4',
-        date: '21 Mar 2026',
-        client: 'Cheikh Mbaye',
-        terrain: 'Terrain Beta',
-        amount: 10000,
-        method: 'Wave',
-        status: 'paid',
-      ),
-      TransactionModel(
-        id: '5',
-        date: '20 Mar 2026',
-        client: 'Fatou Diop',
-        terrain: 'Terrain Omega',
-        amount: 15000,
-        method: 'Orange Money',
-        status: 'pending',
-      ),
-      TransactionModel(
-        id: '6',
-        date: '19 Mar 2026',
-        client: 'Assane Fall',
-        terrain: 'Terrain Alpha',
-        amount: 8000,
-        method: 'Free Money',
-        status: 'paid',
-      ),
-    ];
+  Future<void> loadPayments() async {
+    isLoading.value = true;
+    errorMessage.value = '';
+    try {
+      final data = await _service.getOwnerRevenueData();
+      totalRevenue.value = data.totalPaid;
+      monthlyRevenue.value = data.monthPaid;
+      pendingAmount.value = data.pendingAmount;
+      transactions.value = data.transactions
+          .map(TransactionModel.fromOwnerTransaction)
+          .toList();
+      await _loadPayoutInfo();
+    } catch (_) {
+      errorMessage.value = 'Impossible de charger les paiements';
+      Get.snackbar(
+        'Erreur',
+        'Impossible de charger les paiements',
+        snackPosition: SnackPosition.TOP,
+      );
+    } finally {
+      isLoading.value = false;
+    }
   }
 
-  /// Transactions filtrées selon le filtre actif
+  /// Transactions filtrées par statut
   List<TransactionModel> get filteredTransactions {
-    if (selectedFilter.value == 'all') return transactions;
-    return transactions.where((t) => t.status == selectedFilter.value).toList();
+    final periodItems = periodTransactions;
+    if (selectedFilter.value == 'all') return periodItems;
+    return periodItems.where((t) => t.status == selectedFilter.value).toList();
   }
 
-  /// Change le filtre actif
+  List<TransactionModel> get periodTransactions {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final start = switch (selectedPeriod.value) {
+      'day' => today,
+      'week' => today.subtract(Duration(days: today.weekday - 1)),
+      _ => DateTime(now.year, now.month),
+    };
+    final end = switch (selectedPeriod.value) {
+      'day' => start.add(const Duration(days: 1)),
+      'week' => start.add(const Duration(days: 7)),
+      _ => DateTime(now.year, now.month + 1),
+    };
+
+    return transactions.where((t) {
+      return !t.rawDate.isBefore(start) && t.rawDate.isBefore(end);
+    }).toList();
+  }
+
+  /// Transactions groupées par date
+  Map<String, List<TransactionModel>> get groupedTransactions {
+    final filtered = filteredTransactions;
+    final map = <String, List<TransactionModel>>{};
+    for (final t in filtered) {
+      map.putIfAbsent(t.date, () => []).add(t);
+    }
+    return map;
+  }
+
+  /// Répartition par méthode de paiement (uniquement les payés)
+  Map<String, int> get methodBreakdown {
+    final paid = periodTransactions.where((t) => t.status == 'paid');
+    final map = <String, int>{};
+    for (final t in paid) {
+      map[t.method] = (map[t.method] ?? 0) + t.amount;
+    }
+    return map;
+  }
+
+  int get totalPaidAmount => periodTransactions
+      .where((t) => t.status == 'paid')
+      .fold(0, (s, t) => s + t.amount);
+
   void setFilter(String f) => selectedFilter.value = f;
+  void setPeriod(String p) {
+    selectedPeriod.value = p;
+    selectedFilter.value = 'all';
+  }
 
   Future<void> refreshPayments() async {
-    isLoading.value = true;
-    await Future.delayed(const Duration(milliseconds: 800));
-    _loadMockTransactions();
-    isLoading.value = false;
+    await loadPayments();
   }
 
-  int get paidCount => transactions.where((t) => t.status == 'paid').length;
-  int get pendingCount => transactions.where((t) => t.status == 'pending').length;
+  void goToPayoutSettings() => Get.toNamed(Routes.paymentMethods);
+
+  int get paidCount =>
+      periodTransactions.where((t) => t.status == 'paid').length;
+  int get pendingCount =>
+      periodTransactions.where((t) => t.status == 'pending').length;
+  int get failedCount =>
+      periodTransactions.where((t) => t.status == 'failed').length;
 
   String formatAmount(int v) {
-    if (v >= 1000000) return '${(v / 1000000).toStringAsFixed(1)}M';
-    if (v >= 1000) return '${(v / 1000).toStringAsFixed(v % 1000 == 0 ? 0 : 1)}k';
+    if (v >= 1000000) {
+      return '${(v / 1000000).toStringAsFixed(1)}M';
+    }
+    if (v >= 1000) {
+      return '${(v / 1000).toStringAsFixed(v % 1000 == 0 ? 0 : 1)}k';
+    }
     return v.toString();
+  }
+
+  Future<void> _loadPayoutInfo() async {
+    try {
+      final token = await _authService.savedToken();
+      if (token == null || token.isEmpty) return;
+      final info = await _authService.getPayoutInfo(token);
+      final preferred =
+          info['preferredPayoutMethod']?.toString() ??
+          (info['payoutWavePhone'] != null
+              ? 'WAVE'
+              : info['payoutOrangePhone'] != null
+              ? 'ORANGE_MONEY'
+              : info['payoutFreePhone'] != null
+              ? 'FREE_MONEY'
+              : null);
+      payoutMethod.value = preferred;
+      payoutPhone.value = switch (preferred) {
+        'WAVE' => info['payoutWavePhone']?.toString(),
+        'ORANGE_MONEY' => info['payoutOrangePhone']?.toString(),
+        'FREE_MONEY' => info['payoutFreePhone']?.toString(),
+        _ => null,
+      };
+    } catch (_) {
+      payoutMethod.value = null;
+      payoutPhone.value = null;
+    }
+  }
+
+  String get payoutMethodLabel {
+    switch (payoutMethod.value) {
+      case 'WAVE':
+        return 'Wave';
+      case 'ORANGE_MONEY':
+        return 'Orange Money';
+      case 'FREE_MONEY':
+        return 'Yas Money';
+      default:
+        return 'Non configuré';
+    }
   }
 }

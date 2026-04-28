@@ -1,57 +1,115 @@
 import 'package:get/get.dart';
+import '../../../core/services/dashboard_service.dart';
 import '../../../routes/app_routes.dart';
 
 class DashboardController extends GetxController {
+  final _service = DashboardService();
+
   final selectedTab = 0.obs;
 
-  // Stats mock
-  final totalRevenue  = 485000.obs;
-  final todayRevenue  = 45000.obs;
-  final totalBookings = 128.obs;
-  final todayBookings = 7.obs;
-  final rating        = 4.8.obs;
-  final occupancyRate = 0.72.obs;
-  final notificationCount = 3.obs;
+  final isLoading = false.obs;
+  final errorMessage = ''.obs;
+
+  final ownerName = 'Propriétaire'.obs;
+  final totalRevenue = 0.obs;
+  final todayRevenue = 0.obs;
+  final totalBookings = 0.obs;
+  final todayBookings = 0.obs;
+  final confirmedBookings = 0.obs;
+  final pendingPayments = 0.obs;
+  final terrainCount = 0.obs;
+  final activeTerrainCount = 0.obs;
+  final rating = 0.0.obs;
+  final occupancyRate = 0.0.obs;
+  final notificationCount = 0.obs;
   final chartPeriod = 'week'.obs; // 'week' ou 'month'
 
-  final monthlyData = <double>[
-    120000, 145000, 98000, 170000, 162000, 185000,
-    145000, 195000, 130000, 210000, 178000, 155000,
-  ].obs;
+  final monthlyData = List<double>.filled(12, 0).obs;
+  final weeklyData = List<double>.filled(7, 0).obs;
+  final recentBookings = <Map<String, dynamic>>[].obs;
+
+  @override
+  void onInit() {
+    super.onInit();
+    loadDashboard();
+  }
 
   void toggleChartPeriod(String period) => chartPeriod.value = period;
 
   List<double> get activeChartData =>
       chartPeriod.value == 'week' ? weeklyData : monthlyData;
 
-  List<String> get activeChartLabels =>
-      chartPeriod.value == 'week'
-          ? ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
-          : ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+  List<String> get activeChartLabels => chartPeriod.value == 'week'
+      ? ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+      : [
+          'Jan',
+          'Fév',
+          'Mar',
+          'Avr',
+          'Mai',
+          'Jun',
+          'Jul',
+          'Aoû',
+          'Sep',
+          'Oct',
+          'Nov',
+          'Déc',
+        ];
 
-  Future<void> refreshDashboard() async {
-    await Future.delayed(const Duration(seconds: 1));
-    // Simule un refresh des données
-    todayBookings.value = todayBookings.value;
-    notificationCount.value = 0;
+  String get ownerInitials {
+    final parts = ownerName.value
+        .trim()
+        .split(RegExp(r'\s+'))
+        .where((part) => part.isNotEmpty)
+        .toList();
+    if (parts.isEmpty) return 'MF';
+    final first = parts.first[0];
+    final second = parts.length > 1 ? parts.last[0] : '';
+    return '$first$second'.toUpperCase();
   }
 
-  final recentBookings = <Map<String, dynamic>>[
-    {'name': 'Équipe Lions FC',      'time': '10h00 – 11h00', 'terrain': 'Terrain A', 'amount': 8000,  'status': 'confirmed'},
-    {'name': 'Mamadou Diallo',       'time': '12h00 – 13h00', 'terrain': 'Terrain B', 'amount': 6000,  'status': 'pending'},
-    {'name': 'AS Médina',            'time': '14h00 – 15h00', 'terrain': 'Terrain A', 'amount': 8000,  'status': 'confirmed'},
-    {'name': 'Ibrahima Ndiaye',      'time': '16h00 – 17h00', 'terrain': 'Terrain C', 'amount': 5000,  'status': 'confirmed'},
-    {'name': 'FC Grand Yoff',        'time': '18h00 – 19h00', 'terrain': 'Terrain B', 'amount': 6000,  'status': 'pending'},
-  ].obs;
+  Future<void> loadDashboard() async {
+    isLoading.value = true;
+    errorMessage.value = '';
+    try {
+      final data = await _service.getOwnerDashboard();
+      ownerName.value = data.ownerName;
+      totalRevenue.value = data.totalRevenue;
+      todayRevenue.value = data.todayRevenue;
+      totalBookings.value = data.totalBookings;
+      todayBookings.value = data.todayBookings;
+      confirmedBookings.value = data.confirmedBookings;
+      pendingPayments.value = data.pendingPayments;
+      terrainCount.value = data.terrainCount;
+      activeTerrainCount.value = data.activeTerrainCount;
+      rating.value = data.rating;
+      occupancyRate.value = data.occupancyRate;
+      weeklyData.value = data.weeklyData;
+      monthlyData.value = data.monthlyData;
+      recentBookings.value = data.recentBookings;
+      notificationCount.value = data.pendingPayments;
+    } catch (_) {
+      errorMessage.value = 'Impossible de charger le tableau de bord';
+      Get.snackbar(
+        'Erreur',
+        'Impossible de charger le tableau de bord',
+        snackPosition: SnackPosition.TOP,
+      );
+    } finally {
+      isLoading.value = false;
+    }
+  }
 
-  final weeklyData = <double>[42000, 55000, 38000, 70000, 62000, 85000, 45000].obs;
+  Future<void> refreshDashboard() async {
+    await loadDashboard();
+  }
 
   void changeTab(int i) => selectedTab.value = i;
 
-  void goToTerrains()      => Get.toNamed(Routes.terrainList);
-  void goToReservations()  => Get.toNamed(Routes.reservations);
-  void goToAvailability()  => Get.toNamed(Routes.availability);
-  void goToPayments()      => Get.toNamed(Routes.payments);
-  void goToProfile()        => Get.toNamed(Routes.profile);
-  void goToNotifications()  => Get.toNamed(Routes.notifications);
+  void goToTerrains() => Get.toNamed(Routes.terrainList);
+  void goToReservations() => Get.toNamed(Routes.reservations);
+  void goToAvailability() => Get.toNamed(Routes.availability);
+  void goToPayments() => Get.toNamed(Routes.payments);
+  void goToProfile() => Get.toNamed(Routes.profile);
+  void goToNotifications() => Get.toNamed(Routes.notifications);
 }

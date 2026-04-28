@@ -1,4 +1,6 @@
+import 'package:intl/intl.dart';
 import 'package:get/get.dart';
+import '../../../core/services/reservation_service.dart';
 
 class ReservationModel {
   final String id;
@@ -9,6 +11,10 @@ class ReservationModel {
   final String timeSlot;
   final int amount;
   final String status; // confirmed / pending / cancelled
+  final String phone;
+  final String reference;
+  final String paymentMethod;
+  final String paymentStatus;
 
   ReservationModel({
     required this.id,
@@ -19,10 +25,104 @@ class ReservationModel {
     required this.timeSlot,
     required this.amount,
     required this.status,
+    required this.phone,
+    required this.reference,
+    required this.paymentMethod,
+    required this.paymentStatus,
   });
+
+  factory ReservationModel.fromJson(Map<String, dynamic> json) {
+    final user = json['user'] as Map<String, dynamic>?;
+    final terrain = json['terrain'] as Map<String, dynamic>?;
+    final firstName = (user?['firstName'] ?? '').toString().trim();
+    final lastName = (user?['lastName'] ?? '').toString().trim();
+    final clientName = '$firstName $lastName'.trim();
+
+    return ReservationModel(
+      id: (json['id'] ?? '').toString(),
+      clientName: clientName.isNotEmpty ? clientName : 'Client MiniFoot',
+      teamName: (user?['phone'] ?? json['reference'] ?? 'Client').toString(),
+      terrain: (terrain?['name'] ?? 'Terrain').toString(),
+      date: _formatDate(json['date']),
+      timeSlot: _formatSlot(json['startSlot'], json['endSlot']),
+      amount: _asInt(json['finalPrice'] ?? json['totalPrice']),
+      status: _mapStatus(json['status']),
+      phone: (user?['phone'] ?? '').toString(),
+      reference: (json['reference'] ?? '').toString(),
+      paymentMethod: _formatPaymentMethod(json['paymentMethod']),
+      paymentStatus: _formatPaymentStatus(json['payments']),
+    );
+  }
+
+  bool get canCancel => status == 'pending';
+
+  static int _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static String _formatDate(dynamic value) {
+    final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+    if (date == null) return value?.toString() ?? '';
+    return DateFormat('dd MMM yyyy', 'fr_FR').format(date);
+  }
+
+  static String _formatSlot(dynamic start, dynamic end) {
+    final startText = start?.toString() ?? '';
+    final endText = end?.toString() ?? '';
+    if (startText.isEmpty && endText.isEmpty) return '';
+    return '$startText – $endText';
+  }
+
+  static String _mapStatus(dynamic value) {
+    switch (value?.toString()) {
+      case 'CONFIRMED':
+      case 'COMPLETED':
+        return 'confirmed';
+      case 'CANCELLED':
+        return 'cancelled';
+      case 'PENDING_PAYMENT':
+      default:
+        return 'pending';
+    }
+  }
+
+  static String _formatPaymentMethod(dynamic value) {
+    switch (value?.toString()) {
+      case 'WAVE':
+        return 'Wave';
+      case 'ORANGE_MONEY':
+        return 'Orange Money';
+      case 'FREE_MONEY':
+        return 'Free Money';
+      default:
+        return value?.toString() ?? 'Non défini';
+    }
+  }
+
+  static String _formatPaymentStatus(dynamic value) {
+    if (value is! List || value.isEmpty) return 'Aucun paiement';
+    final lastPayment = value.last;
+    final status = lastPayment is Map<String, dynamic>
+        ? lastPayment['status']?.toString()
+        : null;
+    switch (status) {
+      case 'COMPLETED':
+        return 'Payé';
+      case 'FAILED':
+        return 'Échoué';
+      case 'REFUNDED':
+        return 'Remboursé';
+      case 'PENDING':
+      default:
+        return 'En attente';
+    }
+  }
 }
 
 class ReservationsController extends GetxController {
+  final _service = ReservationService();
   final _allReservations = <ReservationModel>[].obs;
   final selectedFilter = 'all'.obs;
   final isLoading = false.obs;
@@ -30,92 +130,27 @@ class ReservationsController extends GetxController {
   @override
   void onInit() {
     super.onInit();
-    _loadMockReservations();
+    loadReservations();
   }
 
-  void _loadMockReservations() {
-    _allReservations.value = [
-      ReservationModel(
-        id: '1',
-        clientName: 'Mamadou Diallo',
-        teamName: 'Lions FC',
-        terrain: 'Terrain Alpha',
-        date: '22 Mar 2026',
-        timeSlot: '10h00 – 11h00',
-        amount: 8000,
-        status: 'confirmed',
-      ),
-      ReservationModel(
-        id: '2',
-        clientName: 'Ibrahima Ndiaye',
-        teamName: 'AS Médina',
-        terrain: 'Terrain Beta',
-        date: '22 Mar 2026',
-        timeSlot: '12h00 – 13h00',
-        amount: 10000,
-        status: 'pending',
-      ),
-      ReservationModel(
-        id: '3',
-        clientName: 'Ousmane Sow',
-        teamName: 'FC Grand Yoff',
-        terrain: 'Terrain Alpha',
-        date: '23 Mar 2026',
-        timeSlot: '09h00 – 10h00',
-        amount: 8000,
-        status: 'confirmed',
-      ),
-      ReservationModel(
-        id: '4',
-        clientName: 'Abdou Sy',
-        teamName: 'Team Almadies',
-        terrain: 'Terrain Omega',
-        date: '23 Mar 2026',
-        timeSlot: '15h00 – 16h00',
-        amount: 15000,
-        status: 'cancelled',
-      ),
-      ReservationModel(
-        id: '5',
-        clientName: 'Cheikh Mbaye',
-        teamName: 'Star Club',
-        terrain: 'Terrain Beta',
-        date: '24 Mar 2026',
-        timeSlot: '17h00 – 18h00',
-        amount: 10000,
-        status: 'confirmed',
-      ),
-      ReservationModel(
-        id: '6',
-        clientName: 'Fatou Diop',
-        teamName: 'Ladies FC',
-        terrain: 'Terrain Alpha',
-        date: '24 Mar 2026',
-        timeSlot: '19h00 – 20h00',
-        amount: 8000,
-        status: 'pending',
-      ),
-      ReservationModel(
-        id: '7',
-        clientName: 'Moussa Thiam',
-        teamName: 'United Dakar',
-        terrain: 'Terrain Omega',
-        date: '25 Mar 2026',
-        timeSlot: '08h00 – 09h00',
-        amount: 15000,
-        status: 'cancelled',
-      ),
-      ReservationModel(
-        id: '8',
-        clientName: 'Assane Fall',
-        teamName: 'Plateau FC',
-        terrain: 'Terrain Beta',
-        date: '25 Mar 2026',
-        timeSlot: '20h00 – 21h00',
-        amount: 10000,
-        status: 'confirmed',
-      ),
-    ];
+  Future<void> loadReservations() async {
+    isLoading.value = true;
+    try {
+      final data = await _service.getOwnerReservations();
+      _allReservations.value = data
+          .map(
+            (item) => ReservationModel.fromJson(item as Map<String, dynamic>),
+          )
+          .toList();
+    } catch (e) {
+      Get.snackbar(
+        'Erreur',
+        'Impossible de charger les réservations',
+        snackPosition: SnackPosition.TOP,
+      );
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   List<ReservationModel> get filteredReservations {
@@ -128,10 +163,34 @@ class ReservationsController extends GetxController {
   void setFilter(String filter) => selectedFilter.value = filter;
 
   Future<void> refreshReservations() async {
-    isLoading.value = true;
-    await Future.delayed(const Duration(milliseconds: 800));
-    _loadMockReservations();
-    isLoading.value = false;
+    await loadReservations();
+  }
+
+  Future<void> cancelReservation(String id) async {
+    Get.defaultDialog(
+      title: 'Refuser la réservation',
+      middleText: 'Cette réservation passera en statut annulé.',
+      textCancel: 'Garder',
+      textConfirm: 'Refuser',
+      onConfirm: () async {
+        Get.back();
+        try {
+          await _service.cancelOwnerReservation(id);
+          await loadReservations();
+          Get.snackbar(
+            'Réservation refusée',
+            'Le créneau est à nouveau disponible.',
+            snackPosition: SnackPosition.TOP,
+          );
+        } catch (e) {
+          Get.snackbar(
+            'Erreur',
+            'Impossible de refuser cette réservation',
+            snackPosition: SnackPosition.TOP,
+          );
+        }
+      },
+    );
   }
 
   int get totalCount => _allReservations.length;

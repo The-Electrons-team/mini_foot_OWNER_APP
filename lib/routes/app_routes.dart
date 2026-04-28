@@ -4,6 +4,7 @@ import '../features/auth/screens/splash_screen.dart';
 import '../features/auth/screens/onboarding_screen.dart';
 import '../features/auth/screens/login_screen.dart';
 import '../features/auth/screens/register_screen.dart';
+import '../features/auth/screens/otp_screen.dart';
 import '../features/dashboard/bindings/dashboard_binding.dart';
 import '../features/dashboard/screens/dashboard_screen.dart';
 import '../features/terrain/bindings/terrain_binding.dart';
@@ -22,12 +23,17 @@ import '../features/profile/screens/profile_screen.dart';
 import '../features/profile/screens/edit_profile_screen.dart';
 import '../features/profile/screens/security_screen.dart';
 import '../features/profile/screens/payment_methods_screen.dart';
+import '../features/revenues/bindings/revenues_binding.dart';
+import '../features/revenues/screens/revenues_screen.dart';
+import '../features/chat/bindings/chat_binding.dart';
+import '../features/chat/screens/chat_list_screen.dart';
 
 abstract class Routes {
   static const splash       = '/';
   static const onboarding   = '/onboarding';
   static const login        = '/login';
   static const register     = '/register';
+  static const otp          = '/otp';
   static const dashboard    = '/dashboard';
   static const terrainList  = '/terrains';
   static const terrainForm  = '/terrains/form';
@@ -39,6 +45,8 @@ abstract class Routes {
   static const editProfile    = '/profile/edit';
   static const security       = '/profile/security';
   static const paymentMethods = '/profile/payment-methods';
+  static const revenues        = '/revenues';
+  static const chat            = '/chat';
 }
 
 final appPages = [
@@ -67,6 +75,13 @@ final appPages = [
   GetPage(
     name: Routes.register,
     page: () => const RegisterScreen(),
+    binding: AuthBinding(),
+    transition: Transition.rightToLeftWithFade,
+    transitionDuration: const Duration(milliseconds: 350),
+  ),
+  GetPage(
+    name: Routes.otp,
+    page: () => OtpScreen(phone: Get.arguments as String? ?? ''),
     binding: AuthBinding(),
     transition: Transition.rightToLeftWithFade,
     transitionDuration: const Duration(milliseconds: 350),
@@ -150,6 +165,20 @@ final appPages = [
     page: () => const PaymentMethodsScreen(),
     binding: ProfileBinding(),
     transition: Transition.rightToLeftWithFade,
+    transitionDuration: const Duration(milliseconds: 300),
+  ),
+  GetPage(
+    name: Routes.revenues,
+    page: () => const RevenuesScreen(),
+    binding: RevenuesBinding(),
+    transition: Transition.cupertino,
+    transitionDuration: const Duration(milliseconds: 300),
+  ),
+  GetPage(
+    name: Routes.chat,
+    page: () => const ChatListScreen(),
+    binding: ChatBinding(),
+    transition: Transition.downToUp,
     transitionDuration: const Duration(milliseconds: 300),
   ),
 ];

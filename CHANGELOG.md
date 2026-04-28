@@ -1,5 +1,41 @@
 # Changelog - MiniFoot Owner
 
+## [1.3.0] - 2026-04-28
+
+### Connexion backend
+- **Terrains connectés** : liste propriétaire via `GET /terrains/mine`, création, modification, suppression et upload images branchés sur le backend.
+- **Sécurité owner** : création avec propriétaire déduit du JWT ; modification, suppression et upload limités aux terrains du propriétaire connecté.
+- **Images terrain** : normalisation des URLs MinIO locales vers le proxy backend `GET /storage/terrains/*` pour l'affichage mobile.
+- **Localisation** : le bouton "Notre position" remplit le champ avec `Votre position` et envoie les coordonnées `lat` / `lng`.
+- **Réservations owner** : liste branchée sur `GET /reservations/owner/mine`, détail en bottom sheet, refus des réservations en attente via `PATCH /reservations/owner/:id/cancel`.
+- **Profil owner** : affichage connecté à `GET /users/me`, stats calculées depuis terrains/réservations, modification prénom/nom via `PATCH /users/me`, photo via `POST /users/me/avatar`, formulaire édition épuré.
+- **Profil avancé owner** : coordonnées Wave/Orange Money/Yas Money via `GET/PATCH /users/me/payout-info` et changement téléphone par OTP via `POST /users/me/phone/request` + `PATCH /users/me/phone/confirm`.
+- **Mots de passe** : réinitialisation depuis le login via OTP (`POST /auth/forgot-password`, `POST /auth/reset-password`) et changement connecté depuis le profil (`PATCH /users/me/password`).
+- **Disponibilités owner** : créneaux réels via `GET /terrains/:id/slots`, blocage/déblocage individuel et en lot via les endpoints backend sécurisés.
+- **Dashboard owner** : stats, revenus, graphique semaine/mois et réservations récentes agrégés depuis les terrains/réservations/profil réels.
+- **Revenus / paiements owner** : historique transactions, totaux, répartition par méthode, graphiques revenus et classement terrain calculés depuis les paiements réels.
+- **Rapports PDF** : rapports revenus et réservations générés depuis les données réelles, avec aperçu, impression et partage.
+
+### Design & UX
+- **Liste terrains modernisée** : stats total/actifs/pause, recherche, filtres statut, cartes avec grande photo, actions rapides et prix réel par heure (`10 000 F/h`).
+- **Formulaire terrain amélioré** : aperçu photo plus moderne, thumbnails, Mapbox, géolocalisation et retour automatique à la liste après création/modification réussie.
+- **Profil propriétaire simplifié** : carte identité compacte, stats clés, revenu confirmé, raccourcis Terrains/Réservations/Créneaux et bloc informations réelles.
+- **Avatar propriétaire** : photo ronde dans le profil, choix caméra/galerie, chargement visuel et affichage via proxy storage.
+- **Modification profil épurée** : formulaire réduit aux champs supportés par le backend, téléphone en lecture seule et sauvegarde claire.
+- **Reversements owner** : écran dédié aux numéros de réception, méthode préférée et accès rapide depuis le profil/paiements.
+- **Sécurité profil épurée** : écran réduit au changement de mot de passe réel, avec validations et feedback.
+- **Disponibilités stabilisées** : état vide si aucun terrain, pull-to-refresh, action en lot avec chargement et feedback clair.
+- **Dashboard assaini** : image locale, pull-to-refresh, états vides, sous-titres dynamiques et suppression des données visuelles fictives.
+- **Paiements et revenus stabilisés** : pull-to-refresh, destination de reversement, états vides, feedback chargement/erreur et périodes jour/semaine/mois.
+- **PDF assainis** : propriétaire réel, police PDF intégrée stable, observations calculées, aucun indicateur inventé et erreurs de génération journalisées.
+- **Formulaires stabilisés** : désactivation de la sélection interactive sur les champs sensibles pour éviter le crash Flutter `RenderEditable.selectWord` au long appui.
+
+### Données de dev
+- **Seed dashboard owner** : script `npm run prisma:seed:owner-dashboard` pour générer des réservations utiles au dashboard du propriétaire `771234569`.
+
+### Prochaine tâche
+- **Notifications owner** : connecter la liste, les statuts lus et l'enregistrement FCM.
+
 ## [1.2.0] - 2026-03-22
 
 ### Design & UI (Phase 3 - Experience premium)
