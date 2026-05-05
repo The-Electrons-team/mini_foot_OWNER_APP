@@ -1,5 +1,13 @@
 # Changelog - MiniFoot Owner
 
+## [1.3.1] - 2026-05-05
+
+### Backend
+- **Dashboard owner dédié** : l'écran dashboard consomme maintenant `GET /owner/dashboard` au lieu d'agréger `GET /users/me`, `GET /terrains/mine` et `GET /reservations/owner/mine` côté Flutter.
+
+### Technique
+- **Service dashboard simplifié** : `DashboardService` parse directement la réponse backend et conserve le même contrat UI (`ownerName`, revenus, réservations, graphiques semaine/mois, terrains, taux d'occupation et réservations récentes).
+
 ## [1.3.0] - 2026-04-28
 
 ### Connexion backend

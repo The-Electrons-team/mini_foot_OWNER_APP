@@ -32,7 +32,7 @@ MAPBOX_ACCESS_TOKEN=...
 | Profil propriétaire | Profil épuré + photo, édition prénom/nom, téléphone OTP et mot de passe connectés |
 | Mot de passe oublié | OTP + réinitialisation depuis l'écran login |
 | Disponibilités | Créneaux réels + blocage/déblocage connectés |
-| Dashboard | Stats, revenus, graphique et réservations récentes connectés |
+| Dashboard | Stats, revenus, graphique et réservations récentes via endpoint dédié |
 | Revenus / paiements | Transactions, reversements, totaux, filtres et graphiques connectés |
 | Rapports PDF | Revenus + réservations générés depuis les données réelles, avec aperçu/impression/partage |
 
@@ -61,13 +61,11 @@ Les créneaux réservés ne peuvent pas être bloqués/débloqués depuis l'app 
 
 ## Dashboard
 
-Le dashboard utilise `lib/core/services/dashboard_service.dart` et agrège :
+Le dashboard utilise `lib/core/services/dashboard_service.dart` et consomme :
 
-- `GET /users/me`
-- `GET /terrains/mine`
-- `GET /reservations/owner/mine`
+- `GET /owner/dashboard`
 
-Il affiche les revenus confirmés, les réservations du jour, le taux d'occupation du jour, les graphiques semaine/mois et les réservations récentes.
+L'agrégation est faite côté backend : revenus confirmés, réservations du jour, taux d'occupation du jour, graphiques semaine/mois, stats terrains et réservations récentes.
 
 ## Revenus / Paiements
 

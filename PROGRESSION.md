@@ -49,14 +49,15 @@ Le reset de mot de passe réutilise l'OTP Redis existant, valable 5 minutes.
 
 | Écran / Action | État | Fichiers Flutter | Endpoint Backend |
 |---|---|---|---|
-| Stats du jour (réservations, revenus) | ✅ CONNECTÉ | `dashboard/screens/dashboard_screen.dart` + `core/services/dashboard_service.dart` | Agrégation `GET /terrains/mine`, `GET /reservations/owner/mine`, `GET /users/me` |
-| Graphique revenus hebdo/mensuel | ✅ CONNECTÉ | `dashboard/controllers/dashboard_controller.dart` | Agrégation réservations confirmées/payées |
-| Réservations récentes | ✅ CONNECTÉ | `dashboard/screens/dashboard_screen.dart` | `GET /reservations/owner/mine` |
+| Stats du jour (réservations, revenus) | ✅ CONNECTÉ | `dashboard/screens/dashboard_screen.dart` + `core/services/dashboard_service.dart` | `GET /owner/dashboard` |
+| Graphique revenus hebdo/mensuel | ✅ CONNECTÉ | `dashboard/controllers/dashboard_controller.dart` | `GET /owner/dashboard` |
+| Réservations récentes | ✅ CONNECTÉ | `dashboard/screens/dashboard_screen.dart` | `GET /owner/dashboard` |
 | Badge alertes paiement | 🔧 PARTIEL | `dashboard/screens/dashboard_screen.dart` | Calcul local depuis réservations en attente |
 
 **Ce qu'il faut créer :**
-- Un endpoint backend `GET /owner/dashboard` plus tard si les agrégations deviennent lourdes.
 - Brancher les vraies notifications quand le module notifications sera connecté.
+
+**Note backend :** `GET /owner/dashboard` renvoie les KPI, séries graphiques et réservations récentes en une seule requête propriétaire.
 
 **Ticket ClickUp :** [86c9gz7c7](https://app.clickup.com/t/86c9gz7c7)
 
@@ -214,7 +215,7 @@ Le reset de mot de passe réutilise l'OTP Redis existant, valable 5 minutes.
 2. ✅ TERRAINS        — CRUD + images + localisation connectés
 2b. ✅ DISPONIBILITÉS — vrais créneaux terrain + blocage/déblocage
 3. 🔧 RÉSERVATIONS    — liste + détail + refus connectés, acceptation à clarifier
-4. ✅ DASHBOARD       — agrège les données terrains + réservations
+4. ✅ DASHBOARD       — endpoint dédié `GET /owner/dashboard`
 5. ✅ REVENUS         — suit les réservations payées
 6. ✅ PROFIL          — affichage, édition prénom/nom, téléphone OTP, avatar, reversements et mot de passe
 7. ⏳ NOTIFICATIONS   — brancher device token FCM
@@ -262,4 +263,4 @@ Le token se récupère via `SharedPreferences`, comme dans le flow auth actuel.
 
 ---
 
-*Dernière mise à jour : 28 avril 2026 — auth, reset mot de passe, terrains, réservations owner, profil avancé, disponibilités, dashboard, revenus, paiements, rapports PDF stabilisés et formulaires sécurisés contre le crash long-press*
+*Dernière mise à jour : 5 mai 2026 — dashboard migré vers `GET /owner/dashboard`, auth, reset mot de passe, terrains, réservations owner, profil avancé, disponibilités, revenus, paiements, rapports PDF stabilisés et formulaires sécurisés contre le crash long-press*
