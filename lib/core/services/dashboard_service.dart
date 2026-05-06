@@ -16,6 +16,7 @@ class OwnerDashboardData {
   final int activeTerrainCount;
   final double rating;
   final double occupancyRate;
+  final int unreadNotifications;
   final List<double> weeklyData;
   final List<double> monthlyData;
   final List<Map<String, dynamic>> recentBookings;
@@ -32,6 +33,7 @@ class OwnerDashboardData {
     required this.activeTerrainCount,
     required this.rating,
     required this.occupancyRate,
+    required this.unreadNotifications,
     required this.weeklyData,
     required this.monthlyData,
     required this.recentBookings,
@@ -50,6 +52,7 @@ class OwnerDashboardData {
       activeTerrainCount: _asInt(json['activeTerrainCount']),
       rating: _asDouble(json['rating']),
       occupancyRate: _asDouble(json['occupancyRate']),
+      unreadNotifications: _asInt(json['unreadNotifications']),
       weeklyData: _asDoubleList(json['weeklyData'], 7),
       monthlyData: _asDoubleList(json['monthlyData'], 12),
       recentBookings: _asMapList(json['recentBookings']),

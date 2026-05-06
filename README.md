@@ -34,6 +34,7 @@ MAPBOX_ACCESS_TOKEN=...
 | Disponibilités | Créneaux réels + blocage/déblocage connectés |
 | Dashboard | Stats, revenus, graphique et réservations récentes via endpoint dédié |
 | Revenus / paiements | Transactions, reversements, totaux, filtres et graphiques connectés |
+| Notifications in-app | Liste réelle, compteur non lu, lecture individuelle et tout lire |
 | Rapports PDF | Revenus + réservations générés depuis les données réelles, avec aperçu/impression/partage |
 
 ## Terrains
@@ -66,6 +67,19 @@ Le dashboard utilise `lib/core/services/dashboard_service.dart` et consomme :
 - `GET /owner/dashboard`
 
 L'agrégation est faite côté backend : revenus confirmés, réservations du jour, taux d'occupation du jour, graphiques semaine/mois, stats terrains et réservations récentes.
+Le badge notifications du dashboard utilise le compteur non lu renvoyé par `GET /owner/dashboard`.
+
+Le bouton ballon du dashboard ouvre maintenant un scanner QR de check-in. Le backend vérifie que la réservation appartient bien à un terrain du propriétaire, qu'elle est confirmée par paiement, puis enregistre la présence via un check-in séparé du `status` principal.
+
+## Notifications
+
+L'écran notifications utilise `lib/core/services/in_app_notification_service.dart` :
+
+- `GET /notifications`
+- `PATCH /notifications/:id/read`
+- `PATCH /notifications/read-all`
+
+Les notifications in-app sont créées côté backend quand une réservation owner est confirmée par paiement ou annulée. Les push FCM restent préparés dans `NotificationService`, mais leur validation iOS réelle dépend d'un compte Apple Developer payant.
 
 ## Revenus / Paiements
 
@@ -109,4 +123,4 @@ L'écran login affiche un lien `Mot de passe oublié ?` :
 
 Prochaine amélioration logique :
 
-- Connecter les notifications owner.
+- Créer une vraie page détail réservation owner.

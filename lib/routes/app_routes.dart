@@ -27,26 +27,29 @@ import '../features/revenues/bindings/revenues_binding.dart';
 import '../features/revenues/screens/revenues_screen.dart';
 import '../features/chat/bindings/chat_binding.dart';
 import '../features/chat/screens/chat_list_screen.dart';
+import '../features/qr_checkin/bindings/qr_checkin_binding.dart';
+import '../features/qr_checkin/screens/qr_checkin_screen.dart';
 
 abstract class Routes {
-  static const splash       = '/';
-  static const onboarding   = '/onboarding';
-  static const login        = '/login';
-  static const register     = '/register';
-  static const otp          = '/otp';
-  static const dashboard    = '/dashboard';
-  static const terrainList  = '/terrains';
-  static const terrainForm  = '/terrains/form';
+  static const splash = '/';
+  static const onboarding = '/onboarding';
+  static const login = '/login';
+  static const register = '/register';
+  static const otp = '/otp';
+  static const dashboard = '/dashboard';
+  static const terrainList = '/terrains';
+  static const terrainForm = '/terrains/form';
   static const reservations = '/reservations';
   static const availability = '/availability';
-  static const payments       = '/payments';
-  static const notifications  = '/notifications';
-  static const profile        = '/profile';
-  static const editProfile    = '/profile/edit';
-  static const security       = '/profile/security';
+  static const payments = '/payments';
+  static const notifications = '/notifications';
+  static const profile = '/profile';
+  static const editProfile = '/profile/edit';
+  static const security = '/profile/security';
   static const paymentMethods = '/profile/payment-methods';
-  static const revenues        = '/revenues';
-  static const chat            = '/chat';
+  static const revenues = '/revenues';
+  static const chat = '/chat';
+  static const qrCheckIn = '/qr-check-in';
 }
 
 final appPages = [
@@ -179,6 +182,13 @@ final appPages = [
     page: () => const ChatListScreen(),
     binding: ChatBinding(),
     transition: Transition.downToUp,
+    transitionDuration: const Duration(milliseconds: 300),
+  ),
+  GetPage(
+    name: Routes.qrCheckIn,
+    page: () => const QrCheckInScreen(),
+    binding: QrCheckInBinding(),
+    transition: Transition.cupertino,
     transitionDuration: const Duration(milliseconds: 300),
   ),
 ];

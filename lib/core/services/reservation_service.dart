@@ -45,4 +45,31 @@ class ReservationService {
       throw Exception('Erreur annulation réservation: ${response.body}');
     }
   }
+
+  Future<Map<String, dynamic>> scanOwnerReservation(String qrData) async {
+    final response = await http.post(
+      Uri.parse('$_base/reservations/owner/check-in/scan'),
+      headers: await _headers(),
+      body: jsonEncode({'qrData': qrData}),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    throw Exception('Erreur scan QR: ${response.body}');
+  }
+
+  Future<Map<String, dynamic>> confirmOwnerCheckIn(String id) async {
+    final response = await http.patch(
+      Uri.parse('$_base/reservations/owner/$id/check-in'),
+      headers: await _headers(),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    throw Exception('Erreur confirmation présence: ${response.body}');
+  }
 }

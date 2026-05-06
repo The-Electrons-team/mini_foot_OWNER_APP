@@ -637,7 +637,7 @@ class DashboardScreen extends GetView<DashboardController> {
                 child: GestureDetector(
                   onTap: () {
                     controller.changeTab(2);
-                    controller.goToReservations();
+                    controller.goToQrCheckIn();
                   },
                   child: Container(
                     width: 64,
