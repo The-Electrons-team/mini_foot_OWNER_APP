@@ -72,4 +72,17 @@ class ReservationService {
 
     throw Exception('Erreur confirmation présence: ${response.body}');
   }
+
+  Future<Map<String, dynamic>> getOwnerReservationDetail(String id) async {
+    final response = await http.get(
+      Uri.parse('$_base/reservations/owner/$id'),
+      headers: await _headers(),
+    );
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    throw Exception('Erreur détail réservation: ${response.body}');
+  }
 }

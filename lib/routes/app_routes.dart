@@ -11,6 +11,7 @@ import '../features/terrain/bindings/terrain_binding.dart';
 import '../features/terrain/screens/terrain_list_screen.dart';
 import '../features/terrain/screens/terrain_form_screen.dart';
 import '../features/reservations/bindings/reservations_binding.dart';
+import '../features/reservations/screens/reservation_detail_screen.dart';
 import '../features/reservations/screens/reservations_screen.dart';
 import '../features/availability/bindings/availability_binding.dart';
 import '../features/availability/screens/availability_screen.dart';
@@ -40,6 +41,7 @@ abstract class Routes {
   static const terrainList = '/terrains';
   static const terrainForm = '/terrains/form';
   static const reservations = '/reservations';
+  static const reservationDetail = '/reservations/detail';
   static const availability = '/availability';
   static const payments = '/payments';
   static const notifications = '/notifications';
@@ -117,6 +119,13 @@ final appPages = [
   GetPage(
     name: Routes.reservations,
     page: () => const ReservationsScreen(),
+    binding: ReservationsBinding(),
+    transition: Transition.cupertino,
+    transitionDuration: const Duration(milliseconds: 300),
+  ),
+  GetPage(
+    name: Routes.reservationDetail,
+    page: () => const ReservationDetailScreen(),
     binding: ReservationsBinding(),
     transition: Transition.cupertino,
     transitionDuration: const Duration(milliseconds: 300),

@@ -71,6 +71,8 @@ Le badge notifications du dashboard utilise le compteur non lu renvoyé par `GET
 
 Le bouton ballon du dashboard ouvre maintenant un scanner QR de check-in. Le backend vérifie que la réservation appartient bien à un terrain du propriétaire, qu'elle est confirmée par paiement, puis enregistre la présence via un check-in séparé du `status` principal.
 
+La liste des réservations ouvre maintenant une page détail dédiée, plus lisible sur mobile, avec statut, client, paiement, terrain, référence et état de check-in.
+
 ## Notifications
 
 L'écran notifications utilise `lib/core/services/in_app_notification_service.dart` :
