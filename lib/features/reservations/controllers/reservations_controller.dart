@@ -7,6 +7,7 @@ class ReservationModel {
   final String clientName;
   final String teamName;
   final String terrain;
+  final String subTerrainName;
   final String date;
   final String timeSlot;
   final int amount;
@@ -15,12 +16,14 @@ class ReservationModel {
   final String reference;
   final String paymentMethod;
   final String paymentStatus;
+  final String checkedInAt;
 
   ReservationModel({
     required this.id,
     required this.clientName,
     required this.teamName,
     required this.terrain,
+    required this.subTerrainName,
     required this.date,
     required this.timeSlot,
     required this.amount,
@@ -29,11 +32,13 @@ class ReservationModel {
     required this.reference,
     required this.paymentMethod,
     required this.paymentStatus,
+    required this.checkedInAt,
   });
 
   factory ReservationModel.fromJson(Map<String, dynamic> json) {
     final user = json['user'] as Map<String, dynamic>?;
     final terrain = json['terrain'] as Map<String, dynamic>?;
+    final subTerrain = json['subTerrain'] as Map<String, dynamic>?;
     final firstName = (user?['firstName'] ?? '').toString().trim();
     final lastName = (user?['lastName'] ?? '').toString().trim();
     final clientName = '$firstName $lastName'.trim();
@@ -43,6 +48,7 @@ class ReservationModel {
       clientName: clientName.isNotEmpty ? clientName : 'Client MiniFoot',
       teamName: (user?['phone'] ?? json['reference'] ?? 'Client').toString(),
       terrain: (terrain?['name'] ?? 'Terrain').toString(),
+      subTerrainName: (subTerrain?['name'] ?? '').toString(),
       date: _formatDate(json['date']),
       timeSlot: _formatSlot(json['startSlot'], json['endSlot']),
       amount: _asInt(json['finalPrice'] ?? json['totalPrice']),
@@ -51,10 +57,12 @@ class ReservationModel {
       reference: (json['reference'] ?? '').toString(),
       paymentMethod: _formatPaymentMethod(json['paymentMethod']),
       paymentStatus: _formatPaymentStatus(json['payments']),
+      checkedInAt: _formatDateTime(json['checkedInAt']),
     );
   }
 
   bool get canCancel => status == 'pending';
+  bool get isCheckedIn => checkedInAt.isNotEmpty;
 
   static int _asInt(dynamic value) {
     if (value is int) return value;
@@ -66,6 +74,12 @@ class ReservationModel {
     final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
     if (date == null) return value?.toString() ?? '';
     return DateFormat('dd MMM yyyy', 'fr_FR').format(date);
+  }
+
+  static String _formatDateTime(dynamic value) {
+    final date = DateTime.tryParse(value?.toString() ?? '')?.toLocal();
+    if (date == null) return '';
+    return DateFormat('dd MMM yyyy • HH:mm', 'fr_FR').format(date);
   }
 
   static String _formatSlot(dynamic start, dynamic end) {
@@ -174,23 +188,28 @@ class ReservationsController extends GetxController {
       textConfirm: 'Refuser',
       onConfirm: () async {
         Get.back();
-        try {
-          await _service.cancelOwnerReservation(id);
-          await loadReservations();
-          Get.snackbar(
-            'Réservation refusée',
-            'Le créneau est à nouveau disponible.',
-            snackPosition: SnackPosition.TOP,
-          );
-        } catch (e) {
-          Get.snackbar(
-            'Erreur',
-            'Impossible de refuser cette réservation',
-            snackPosition: SnackPosition.TOP,
-          );
-        }
+        await cancelReservationDirect(id);
       },
     );
+  }
+
+  Future<void> cancelReservationDirect(String id) async {
+    try {
+      await _service.cancelOwnerReservation(id);
+      await loadReservations();
+      Get.snackbar(
+        'Réservation refusée',
+        'Le créneau est à nouveau disponible.',
+        snackPosition: SnackPosition.TOP,
+      );
+    } catch (e) {
+      Get.snackbar(
+        'Erreur',
+        'Impossible de refuser cette réservation',
+        snackPosition: SnackPosition.TOP,
+      );
+      rethrow;
+    }
   }
 
   int get totalCount => _allReservations.length;
@@ -200,4 +219,9 @@ class ReservationsController extends GetxController {
       _allReservations.where((r) => r.status == 'pending').length;
   int get cancelledCount =>
       _allReservations.where((r) => r.status == 'cancelled').length;
+
+  Future<ReservationModel> getReservationDetail(String id) async {
+    final data = await _service.getOwnerReservationDetail(id);
+    return ReservationModel.fromJson(data);
+  }
 }

@@ -120,3 +120,4 @@
 - Ecrans : splash, login, register, dashboard, terrains, reservations, paiements, disponibilites, profil
 - Architecture feature-based avec controllers, screens, bindings
 - **Check-in QR owner** : le bouton ballon du dashboard ouvre maintenant un scanner QR dédié, avec prévisualisation de la réservation et confirmation de présence sans modifier le statut principal de la réservation.
+- **Détail réservation owner** : la liste ouvre maintenant une vraie page détail, plus confortable que l’ancien bottom sheet, avec infos client, paiement, terrain, check-in et action de refus si la réservation est encore en attente.

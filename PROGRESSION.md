@@ -93,13 +93,10 @@ Le reset de mot de passe réutilise l'OTP Redis existant, valable 5 minutes.
 |---|---|---|---|
 | Liste de toutes mes réservations owner | ✅ CONNECTÉ | `reservations/screens/reservations_screen.dart` + `core/services/reservation_service.dart` | `GET /reservations/owner/mine` |
 | Filtrer par statut (en attente, confirmée, annulée) | ✅ CONNECTÉ | `reservations/controllers/reservations_controller.dart` | Filtrage local après `GET /reservations/owner/mine` |
-| Détail d'une réservation owner | ✅ CONNECTÉ | bottom sheet dans `reservations/screens/reservations_screen.dart` | Données de `GET /reservations/owner/mine`, backend détail prêt : `GET /reservations/owner/:id` |
+| Détail d'une réservation owner | ✅ CONNECTÉ | `reservations/screens/reservation_detail_screen.dart` | `GET /reservations/owner/:id` |
 | Check-in QR à l'arrivée | ✅ CONNECTÉ | `qr_checkin/` + bouton ballon dashboard | `POST /reservations/owner/check-in/scan`, `PATCH /reservations/owner/:id/check-in` |
 | Accepter une réservation | ⏳ À DÉFINIR | — | À définir selon le flux paiement/webhook actuel |
 | Refuser une réservation | ✅ CONNECTÉ | `reservations/controllers/reservations_controller.dart` | `PATCH /reservations/owner/:id/cancel` |
-
-**Ce qu'il faut créer :**
-- Ajouter une vraie page détail si le bottom sheet ne suffit pas.
 
 **Note backend :** `GET /reservations` retourne les réservations du joueur connecté (`userId`). L'Owner App utilise maintenant `GET /reservations/owner/mine`, filtré par les terrains du propriétaire.
 
