@@ -87,7 +87,7 @@ class DashboardController extends GetxController {
       weeklyData.value = data.weeklyData;
       monthlyData.value = data.monthlyData;
       recentBookings.value = data.recentBookings;
-      notificationCount.value = data.pendingPayments;
+      notificationCount.value = data.unreadNotifications;
     } catch (_) {
       errorMessage.value = 'Impossible de charger le tableau de bord';
       Get.snackbar(
@@ -112,4 +112,5 @@ class DashboardController extends GetxController {
   void goToPayments() => Get.toNamed(Routes.payments);
   void goToProfile() => Get.toNamed(Routes.profile);
   void goToNotifications() => Get.toNamed(Routes.notifications);
+  void goToQrCheckIn() => Get.toNamed(Routes.qrCheckIn);
 }

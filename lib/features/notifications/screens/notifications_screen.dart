@@ -45,6 +45,19 @@ class NotificationsScreen extends GetView<NotificationsController> {
           _FilterChips(),
           Expanded(
             child: Obx(() {
+              if (controller.isLoading.value &&
+                  controller.notifications.isEmpty) {
+                return const Center(
+                  child: CircularProgressIndicator(color: kGreen),
+                );
+              }
+              if (controller.errorMessage.value.isNotEmpty &&
+                  controller.notifications.isEmpty) {
+                return _ErrorState(
+                  message: controller.errorMessage.value,
+                  onRetry: controller.loadNotifications,
+                );
+              }
               final items = controller.filteredNotifications;
               if (items.isEmpty) {
                 return _EmptyState();
@@ -57,7 +70,10 @@ class NotificationsScreen extends GetView<NotificationsController> {
                   itemCount: items.length,
                   itemBuilder: (context, index) => Padding(
                     padding: const EdgeInsets.only(bottom: 12),
-                    child: _NotificationTile(item: items[index]),
+                    child: _NotificationTile(
+                      item: items[index],
+                      onTap: () => controller.markRead(items[index]),
+                    ),
                   ),
                 ),
               );
@@ -85,7 +101,7 @@ class _FilterChips extends GetView<NotificationsController> {
           return Row(
             children: [
               _FilterChip(
-                label: 'Toutes ($unread)',
+                label: unread > 0 ? 'Toutes ($unread)' : 'Toutes',
                 value: 'all',
                 isSelected: selected == 'all',
                 onTap: () => controller.setFilter('all'),
@@ -103,13 +119,6 @@ class _FilterChips extends GetView<NotificationsController> {
                 value: 'payment',
                 isSelected: selected == 'payment',
                 onTap: () => controller.setFilter('payment'),
-              ),
-              const SizedBox(width: 8),
-              _FilterChip(
-                label: 'Avis',
-                value: 'review',
-                isSelected: selected == 'review',
-                onTap: () => controller.setFilter('review'),
               ),
               const SizedBox(width: 8),
               _FilterChip(
@@ -168,77 +177,84 @@ class _FilterChip extends StatelessWidget {
 
 class _NotificationTile extends StatelessWidget {
   final NotificationItem item;
+  final VoidCallback onTap;
 
-  const _NotificationTile({required this.item});
+  const _NotificationTile({required this.item, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: kBgCard,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: kCardShadow,
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Icône dans un cercle coloré
-          _TypeIcon(type: item.type),
-          const SizedBox(width: 12),
-          // Contenu texte
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: item.isRead ? kBgCard : kGreenLight.withValues(alpha: 0.55),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: item.isRead
+                ? Colors.transparent
+                : kGreen.withValues(alpha: 0.16),
+          ),
+          boxShadow: kCardShadow,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Icône dans un cercle coloré
+            _TypeIcon(type: item.type),
+            const SizedBox(width: 12),
+            // Contenu texte
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    style: const TextStyle(
+                      color: kTextPrim,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    item.message,
+                    style: const TextStyle(
+                      color: kTextSub,
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Temps + indicateur non lu
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  item.title,
-                  style: const TextStyle(
-                    color: kTextPrim,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                  ),
+                  item.time,
+                  style: const TextStyle(color: kTextLight, fontSize: 11),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  item.message,
-                  style: const TextStyle(
-                    color: kTextSub,
-                    fontSize: 13,
-                    height: 1.4,
+                if (!item.isRead) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: kGreen,
+                      shape: BoxShape.circle,
+                    ),
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                ],
               ],
             ),
-          ),
-          const SizedBox(width: 8),
-          // Temps + indicateur non lu
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                item.time,
-                style: const TextStyle(
-                  color: kTextLight,
-                  fontSize: 11,
-                ),
-              ),
-              if (!item.isRead) ...[
-                const SizedBox(height: 8),
-                Container(
-                  width: 8,
-                  height: 8,
-                  decoration: const BoxDecoration(
-                    color: kGreen,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -254,20 +270,17 @@ class _TypeIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (IconData icon, Color iconColor, Color bgColor) = switch (type) {
-      'booking'  => (Icons.calendar_month_rounded, kBlue, kBlueLight),
-      'payment'  => (Icons.payments_rounded, kGreen, kGreenLight),
-      'review'   => (Icons.star_rounded, kGold, kGoldLight),
-      'system'   => (Icons.info_rounded, kTextSub, kBgSurface),
-      _          => (Icons.notifications_rounded, kTextSub, kBgSurface),
+      'booking' => (Icons.calendar_month_rounded, kBlue, kBlueLight),
+      'payment' => (Icons.payments_rounded, kGreen, kGreenLight),
+      'chat' => (Icons.chat_bubble_rounded, kGold, kGoldLight),
+      'system' => (Icons.info_rounded, kTextSub, kBgSurface),
+      _ => (Icons.notifications_rounded, kTextSub, kBgSurface),
     };
 
     return Container(
       width: 44,
       height: 44,
-      decoration: BoxDecoration(
-        color: bgColor,
-        shape: BoxShape.circle,
-      ),
+      decoration: BoxDecoration(color: bgColor, shape: BoxShape.circle),
       child: Icon(icon, color: iconColor, size: 22),
     );
   }
@@ -282,11 +295,7 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(
-            Icons.notifications_none_rounded,
-            size: 64,
-            color: kTextLight,
-          ),
+          Icon(Icons.notifications_none_rounded, size: 64, color: kTextLight),
           const SizedBox(height: 16),
           const Text(
             'Aucune notification',
@@ -297,6 +306,50 @@ class _EmptyState extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ErrorState extends StatelessWidget {
+  final String message;
+  final Future<void> Function() onRetry;
+
+  const _ErrorState({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.wifi_off_rounded, size: 56, color: kTextLight),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: kTextSub,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: onRetry,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: kGreen,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: const Text('Reessayer'),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -49,14 +49,12 @@ Le reset de mot de passe réutilise l'OTP Redis existant, valable 5 minutes.
 
 | Écran / Action | État | Fichiers Flutter | Endpoint Backend |
 |---|---|---|---|
-| Stats du jour (réservations, revenus) | ✅ CONNECTÉ | `dashboard/screens/dashboard_screen.dart` + `core/services/dashboard_service.dart` | Agrégation `GET /terrains/mine`, `GET /reservations/owner/mine`, `GET /users/me` |
-| Graphique revenus hebdo/mensuel | ✅ CONNECTÉ | `dashboard/controllers/dashboard_controller.dart` | Agrégation réservations confirmées/payées |
-| Réservations récentes | ✅ CONNECTÉ | `dashboard/screens/dashboard_screen.dart` | `GET /reservations/owner/mine` |
-| Badge alertes paiement | 🔧 PARTIEL | `dashboard/screens/dashboard_screen.dart` | Calcul local depuis réservations en attente |
+| Stats du jour (réservations, revenus) | ✅ CONNECTÉ | `dashboard/screens/dashboard_screen.dart` + `core/services/dashboard_service.dart` | `GET /owner/dashboard` |
+| Graphique revenus hebdo/mensuel | ✅ CONNECTÉ | `dashboard/controllers/dashboard_controller.dart` | `GET /owner/dashboard` |
+| Réservations récentes | ✅ CONNECTÉ | `dashboard/screens/dashboard_screen.dart` | `GET /owner/dashboard` |
+| Badge notifications non lues | ✅ CONNECTÉ | `dashboard/screens/dashboard_screen.dart` | `GET /owner/dashboard` (`unreadNotifications`) |
 
-**Ce qu'il faut créer :**
-- Un endpoint backend `GET /owner/dashboard` plus tard si les agrégations deviennent lourdes.
-- Brancher les vraies notifications quand le module notifications sera connecté.
+**Note backend :** `GET /owner/dashboard` renvoie les KPI, séries graphiques et réservations récentes en une seule requête propriétaire.
 
 **Ticket ClickUp :** [86c9gz7c7](https://app.clickup.com/t/86c9gz7c7)
 
@@ -96,12 +94,12 @@ Le reset de mot de passe réutilise l'OTP Redis existant, valable 5 minutes.
 | Liste de toutes mes réservations owner | ✅ CONNECTÉ | `reservations/screens/reservations_screen.dart` + `core/services/reservation_service.dart` | `GET /reservations/owner/mine` |
 | Filtrer par statut (en attente, confirmée, annulée) | ✅ CONNECTÉ | `reservations/controllers/reservations_controller.dart` | Filtrage local après `GET /reservations/owner/mine` |
 | Détail d'une réservation owner | ✅ CONNECTÉ | bottom sheet dans `reservations/screens/reservations_screen.dart` | Données de `GET /reservations/owner/mine`, backend détail prêt : `GET /reservations/owner/:id` |
+| Check-in QR à l'arrivée | ✅ CONNECTÉ | `qr_checkin/` + bouton ballon dashboard | `POST /reservations/owner/check-in/scan`, `PATCH /reservations/owner/:id/check-in` |
 | Accepter une réservation | ⏳ À DÉFINIR | — | À définir selon le flux paiement/webhook actuel |
 | Refuser une réservation | ✅ CONNECTÉ | `reservations/controllers/reservations_controller.dart` | `PATCH /reservations/owner/:id/cancel` |
 
 **Ce qu'il faut créer :**
 - Ajouter une vraie page détail si le bottom sheet ne suffit pas.
-- Connecter les notifications liées aux nouvelles réservations payées.
 
 **Note backend :** `GET /reservations` retourne les réservations du joueur connecté (`userId`). L'Owner App utilise maintenant `GET /reservations/owner/mine`, filtré par les terrains du propriétaire.
 
@@ -150,15 +148,18 @@ Le reset de mot de passe réutilise l'OTP Redis existant, valable 5 minutes.
 
 | Écran / Action | État | Fichiers Flutter | Endpoint Backend |
 |---|---|---|---|
-| Liste des notifications | ❌ MOCK | `notifications/screens/notifications_screen.dart` | `GET /notifications` |
-| Marquer comme lu | ❌ MOCK | `notifications/controllers/notifications_controller.dart` | `PATCH /notifications/:id/read` |
-| Push FCM (réservation reçue, etc.) | ⏳ À FAIRE | `core/services/notification_service.dart` | `POST /fcm/register` (enregistrer device token) |
+| Liste des notifications | ✅ CONNECTÉ | `notifications/screens/notifications_screen.dart` + `core/services/in_app_notification_service.dart` | `GET /notifications` |
+| Compteur non lu dashboard | ✅ CONNECTÉ | `dashboard/controllers/dashboard_controller.dart` | `GET /owner/dashboard` |
+| Marquer comme lu | ✅ CONNECTÉ | `notifications/controllers/notifications_controller.dart` | `PATCH /notifications/:id/read` |
+| Tout marquer comme lu | ✅ CONNECTÉ | `notifications/controllers/notifications_controller.dart` | `PATCH /notifications/read-all` |
+| Création notification paiement confirmé | ✅ CONNECTÉ | backend réservations/webhooks | `NotificationsService.create()` |
+| Création notification annulation | ✅ CONNECTÉ | backend réservations | `NotificationsService.create()` |
+| Push FCM iOS/Android | 🔧 PARTIEL | `core/services/notification_service.dart` | Token FCM local prêt, enregistrement backend à faire |
 
-**Note :** `NotificationService` existe déjà dans `core/services/notification_service.dart` pour FCM, mais le device token n'est pas envoyé au backend.
+**Note :** le niveau 1 est connecté en in-app via REST et fonctionne sans compte Apple Developer payant. Les push FCM restent à finaliser plus tard, surtout pour iOS/APNs.
 
 **Ce qu'il faut compléter :**
 - Envoyer le device token à `POST /fcm/register` après connexion
-- Connecter la liste à `GET /notifications`
 
 ---
 
@@ -214,10 +215,10 @@ Le reset de mot de passe réutilise l'OTP Redis existant, valable 5 minutes.
 2. ✅ TERRAINS        — CRUD + images + localisation connectés
 2b. ✅ DISPONIBILITÉS — vrais créneaux terrain + blocage/déblocage
 3. 🔧 RÉSERVATIONS    — liste + détail + refus connectés, acceptation à clarifier
-4. ✅ DASHBOARD       — agrège les données terrains + réservations
+4. ✅ DASHBOARD       — endpoint dédié `GET /owner/dashboard`
 5. ✅ REVENUS         — suit les réservations payées
 6. ✅ PROFIL          — affichage, édition prénom/nom, téléphone OTP, avatar, reversements et mot de passe
-7. ⏳ NOTIFICATIONS   — brancher device token FCM
+7. 🔧 NOTIFICATIONS   — in-app connecté, push FCM à finaliser plus tard
 8. ✅ RAPPORTS PDF    — revenus + réservations avec aperçu, impression, partage et police PDF stable
 9. ⏳ TOURNOIS        — feature à créer from scratch
 10. ⏳ CHAT           — le plus complexe (WebSocket)
@@ -262,4 +263,4 @@ Le token se récupère via `SharedPreferences`, comme dans le flow auth actuel.
 
 ---
 
-*Dernière mise à jour : 28 avril 2026 — auth, reset mot de passe, terrains, réservations owner, profil avancé, disponibilités, dashboard, revenus, paiements, rapports PDF stabilisés et formulaires sécurisés contre le crash long-press*
+*Dernière mise à jour : 5 mai 2026 — notifications in-app owner connectées, dashboard migré vers `GET /owner/dashboard`, auth, reset mot de passe, terrains, réservations owner, profil avancé, disponibilités, revenus, paiements et rapports PDF stabilisés*

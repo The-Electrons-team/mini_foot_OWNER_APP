@@ -32,8 +32,9 @@ MAPBOX_ACCESS_TOKEN=...
 | Profil propriétaire | Profil épuré + photo, édition prénom/nom, téléphone OTP et mot de passe connectés |
 | Mot de passe oublié | OTP + réinitialisation depuis l'écran login |
 | Disponibilités | Créneaux réels + blocage/déblocage connectés |
-| Dashboard | Stats, revenus, graphique et réservations récentes connectés |
+| Dashboard | Stats, revenus, graphique et réservations récentes via endpoint dédié |
 | Revenus / paiements | Transactions, reversements, totaux, filtres et graphiques connectés |
+| Notifications in-app | Liste réelle, compteur non lu, lecture individuelle et tout lire |
 | Rapports PDF | Revenus + réservations générés depuis les données réelles, avec aperçu/impression/partage |
 
 ## Terrains
@@ -61,13 +62,24 @@ Les créneaux réservés ne peuvent pas être bloqués/débloqués depuis l'app 
 
 ## Dashboard
 
-Le dashboard utilise `lib/core/services/dashboard_service.dart` et agrège :
+Le dashboard utilise `lib/core/services/dashboard_service.dart` et consomme :
 
-- `GET /users/me`
-- `GET /terrains/mine`
-- `GET /reservations/owner/mine`
+- `GET /owner/dashboard`
 
-Il affiche les revenus confirmés, les réservations du jour, le taux d'occupation du jour, les graphiques semaine/mois et les réservations récentes.
+L'agrégation est faite côté backend : revenus confirmés, réservations du jour, taux d'occupation du jour, graphiques semaine/mois, stats terrains et réservations récentes.
+Le badge notifications du dashboard utilise le compteur non lu renvoyé par `GET /owner/dashboard`.
+
+Le bouton ballon du dashboard ouvre maintenant un scanner QR de check-in. Le backend vérifie que la réservation appartient bien à un terrain du propriétaire, qu'elle est confirmée par paiement, puis enregistre la présence via un check-in séparé du `status` principal.
+
+## Notifications
+
+L'écran notifications utilise `lib/core/services/in_app_notification_service.dart` :
+
+- `GET /notifications`
+- `PATCH /notifications/:id/read`
+- `PATCH /notifications/read-all`
+
+Les notifications in-app sont créées côté backend quand une réservation owner est confirmée par paiement ou annulée. Les push FCM restent préparés dans `NotificationService`, mais leur validation iOS réelle dépend d'un compte Apple Developer payant.
 
 ## Revenus / Paiements
 
@@ -111,4 +123,4 @@ L'écran login affiche un lien `Mot de passe oublié ?` :
 
 Prochaine amélioration logique :
 
-- Connecter les notifications owner.
+- Créer une vraie page détail réservation owner.

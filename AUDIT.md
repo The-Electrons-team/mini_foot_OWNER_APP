@@ -2,7 +2,7 @@
 
 **Date** : 28 Avril 2026
 **Version** : 1.3.0
-**Statut** : Terrains, disponibilités, réservations owner, profil, mots de passe, dashboard, revenus, paiements et rapports PDF connectés au backend
+**Statut** : Terrains, disponibilités, réservations owner, profil, mots de passe, dashboard dédié, notifications in-app, revenus, paiements et rapports PDF connectés au backend
 
 ---
 
@@ -28,8 +28,9 @@
 | Animations entree | OK | Onboarding (flutter_animate) |
 | Filtres interactifs | OK | Reservations (chips), Graphique (semaine/mois) |
 | Tooltips graphique | OK | Dashboard (toucher barre = montant) |
-| Dashboard réel | OK | Revenus, stats, graphiques et réservations récentes calculés depuis les données backend |
+| Dashboard réel | OK | Revenus, stats, graphiques et réservations récentes via `GET /owner/dashboard` |
 | Paiements réels | OK | Historique transactions, destination de reversement, filtres, périodes et répartition par méthode |
+| Notifications in-app | OK | Liste backend, compteur non lu, tap pour lire, tout lire |
 | Revenus réels | OK | Graphiques revenus, taux d'occupation et classement par terrain |
 | Rapports PDF réels | OK | Revenus + réservations, propriétaire réel, aperçu, impression et partage |
 | PDF stabilisés | OK | Police PDF intégrée, logs d'erreur explicites, pas de dépendance au fichier DMSans local |
@@ -64,7 +65,7 @@
 
 ## Points d'amelioration futurs
 
-1. **Notifications réelles** : connecter la liste et l'enregistrement FCM
+1. **Push FCM** : enregistrer le token device et valider Android/iOS avec compte Apple Developer payant pour APNs
 2. **Profil avancé** : coordonnées bancaires/contrats de reversement si besoin métier
 3. **Rapports PDF avancés** : ajouter filtres de date personnalisés, export détaillé complet et remplacer l'asset DMSans par une vraie police TTF si on veut un rendu typographique custom
 4. **Internationalisation** : Support francais/anglais avec GetX i18n
@@ -76,6 +77,9 @@
 ### Backend / Services
 - `lib/core/services/terrain_service.dart` - Service API terrains, upload images, normalisation URLs storage
 - `minifoot_backend/src/modules/terrains/` - Endpoints owner et vérification propriétaire
+- `minifoot_backend/src/modules/owner/` - Endpoint dédié `GET /owner/dashboard`
+- `minifoot_backend/src/modules/notifications/` - Liste, compteur non lu, lecture et création de notifications in-app
+- `minifoot_backend/src/modules/reservations/` - Notifications owner sur paiement confirmé et annulation
 - `minifoot_backend/src/shared/storage/storage.controller.ts` - Proxy images terrains
 
 ### Terrains
@@ -84,9 +88,12 @@
 - `lib/features/terrain/screens/terrain_form_screen.dart` - Formulaire modernisé, photo preview, Mapbox, géolocalisation, retour liste après succès
 - `lib/features/availability/controllers/availability_controller.dart` - Créneaux backend, blocage/déblocage, actions en lot
 - `lib/features/availability/screens/availability_screen.dart` - Etats vides, refresh, actions de disponibilité réelles
-- `lib/core/services/dashboard_service.dart` - Agrégation profil, terrains, réservations et revenus dashboard
 - `lib/core/services/revenue_service.dart` - Agrégation paiements, revenus, périodes et stats par terrain
+- `lib/core/services/dashboard_service.dart` - Appel dédié `GET /owner/dashboard` et parsing du contrat dashboard
+- `lib/core/services/in_app_notification_service.dart` - Service REST notifications in-app
 - `lib/features/dashboard/controllers/dashboard_controller.dart` - Dashboard réel, stats et graphiques connectés
+- `lib/features/notifications/controllers/notifications_controller.dart` - Liste réelle, filtres, lecture individuelle et tout lire
+- `lib/features/notifications/screens/notifications_screen.dart` - États chargement/erreur/vide et cartes lues/non lues
 - `lib/features/dashboard/screens/dashboard_screen.dart` - UI dashboard assainie, refresh, états vides, données dynamiques
 - `lib/features/payments/controllers/payments_controller.dart` - Paiements réels, reversement préféré, filtres et périodes
 - `lib/features/payments/screens/payments_screen.dart` - Historique transactions connecté, destination de reversement, états et feedback

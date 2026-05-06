@@ -1,5 +1,15 @@
 # Changelog - MiniFoot Owner
 
+## [1.3.1] - 2026-05-05
+
+### Backend
+- **Dashboard owner dédié** : l'écran dashboard consomme maintenant `GET /owner/dashboard` au lieu d'agréger `GET /users/me`, `GET /terrains/mine` et `GET /reservations/owner/mine` côté Flutter.
+- **Notifications in-app owner** : liste réelle via `GET /notifications`, compteur non lu, lecture individuelle, tout lire, création automatique sur paiement confirmé et annulation.
+
+### Technique
+- **Service dashboard simplifié** : `DashboardService` parse directement la réponse backend et conserve le même contrat UI (`ownerName`, revenus, réservations, graphiques semaine/mois, terrains, taux d'occupation et réservations récentes).
+- **Service notifications REST** : ajout de `InAppNotificationService` pour le niveau 1 sans dépendance aux push iOS/APNs.
+
 ## [1.3.0] - 2026-04-28
 
 ### Connexion backend
@@ -34,7 +44,7 @@
 - **Seed dashboard owner** : script `npm run prisma:seed:owner-dashboard` pour générer des réservations utiles au dashboard du propriétaire `771234569`.
 
 ### Prochaine tâche
-- **Notifications owner** : connecter la liste, les statuts lus et l'enregistrement FCM.
+- **Détail réservation owner** : créer une vraie page détail au lieu du bottom sheet.
 
 ## [1.2.0] - 2026-03-22
 
@@ -109,3 +119,4 @@
 - Structure initiale de l'app owner avec GetX
 - Ecrans : splash, login, register, dashboard, terrains, reservations, paiements, disponibilites, profil
 - Architecture feature-based avec controllers, screens, bindings
+- **Check-in QR owner** : le bouton ballon du dashboard ouvre maintenant un scanner QR dédié, avec prévisualisation de la réservation et confirmation de présence sans modifier le statut principal de la réservation.

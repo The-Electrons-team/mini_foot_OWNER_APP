@@ -1,12 +1,16 @@
 import 'package:get/get.dart';
 
+import '../../../core/services/in_app_notification_service.dart';
+import '../../dashboard/controllers/dashboard_controller.dart';
+
 class NotificationItem {
   final String id;
   final String title;
   final String message;
-  final String type; // 'booking', 'payment', 'system', 'review'
+  final String type; // 'booking', 'payment', 'system', 'chat'
   final String time;
   final bool isRead;
+  final DateTime createdAt;
 
   NotificationItem({
     required this.id,
@@ -14,31 +18,78 @@ class NotificationItem {
     required this.message,
     required this.type,
     required this.time,
+    required this.createdAt,
     this.isRead = false,
   });
+
+  factory NotificationItem.fromJson(Map<String, dynamic> json) {
+    final createdAt =
+        DateTime.tryParse(json['createdAt']?.toString() ?? '')?.toLocal() ??
+        DateTime.now();
+    return NotificationItem(
+      id: json['id']?.toString() ?? '',
+      title: json['title']?.toString() ?? 'Notification',
+      message: json['body']?.toString() ?? '',
+      type: _mapType(json),
+      time: _relativeTime(createdAt),
+      isRead: json['read'] == true,
+      createdAt: createdAt,
+    );
+  }
+
+  NotificationItem copyWith({bool? isRead}) {
+    return NotificationItem(
+      id: id,
+      title: title,
+      message: message,
+      type: type,
+      time: time,
+      createdAt: createdAt,
+      isRead: isRead ?? this.isRead,
+    );
+  }
+
+  static String _mapType(Map<String, dynamic> json) {
+    final data = json['data'];
+    final kind = data is Map ? data['kind']?.toString() : null;
+    if (kind == 'payment') return 'payment';
+    if (kind == 'reservation_cancelled') return 'booking';
+
+    return switch (json['type']?.toString()) {
+      'RESERVATION' => 'booking',
+      'PROMO' => 'system',
+      'SYSTEM' => 'system',
+      'CHAT' => 'chat',
+      'MATCH' => 'system',
+      _ => 'system',
+    };
+  }
+
+  static String _relativeTime(DateTime date) {
+    final diff = DateTime.now().difference(date);
+    if (diff.inMinutes < 1) return 'À l’instant';
+    if (diff.inMinutes < 60) return 'Il y a ${diff.inMinutes} min';
+    if (diff.inHours < 24) return 'Il y a ${diff.inHours}h';
+    if (diff.inDays == 1) return 'Hier';
+    if (diff.inDays < 7) return 'Il y a ${diff.inDays} jours';
+    return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}';
+  }
 }
 
 class NotificationsController extends GetxController {
+  final _service = InAppNotificationService();
+
   final notifications = <NotificationItem>[].obs;
   final selectedFilter = 'all'.obs;
+  final isLoading = false.obs;
+  final errorMessage = ''.obs;
+  final total = 0.obs;
+  final unreadTotal = 0.obs;
 
   @override
   void onInit() {
     super.onInit();
-    _loadMockData();
-  }
-
-  void _loadMockData() {
-    notifications.value = [
-      NotificationItem(id: '1', title: 'Nouvelle reservation', message: 'Lions FC a reserve le Terrain A pour demain 10h-11h', type: 'booking', time: 'Il y a 5 min'),
-      NotificationItem(id: '2', title: 'Paiement recu', message: 'Paiement de 8 000 F CFA confirme pour la reservation #1042', type: 'payment', time: 'Il y a 30 min'),
-      NotificationItem(id: '3', title: 'Nouvel avis', message: 'AS Medina a laisse un avis 5 etoiles sur le Terrain B', type: 'review', time: 'Il y a 1h'),
-      NotificationItem(id: '4', title: 'Reservation annulee', message: 'FC Grand Yoff a annule sa reservation du 24 Mars', type: 'booking', time: 'Il y a 2h', isRead: true),
-      NotificationItem(id: '5', title: 'Mise a jour systeme', message: 'Nouvelle version de MiniFoot disponible. Mettez a jour pour les dernières fonctionnalites', type: 'system', time: 'Il y a 5h', isRead: true),
-      NotificationItem(id: '6', title: 'Paiement en attente', message: 'Le paiement de Mamadou Diallo pour le 25 Mars est en attente', type: 'payment', time: 'Hier'),
-      NotificationItem(id: '7', title: 'Nouvelle reservation', message: 'Star Club a reserve le Terrain C pour samedi 16h-18h', type: 'booking', time: 'Hier'),
-      NotificationItem(id: '8', title: 'Rapport mensuel', message: 'Votre rapport de revenus de Mars est disponible', type: 'system', time: 'Il y a 2 jours', isRead: true),
-    ];
+    loadNotifications();
   }
 
   void setFilter(String filter) => selectedFilter.value = filter;
@@ -50,12 +101,94 @@ class NotificationsController extends GetxController {
 
   int get unreadCount => notifications.where((n) => !n.isRead).length;
 
-  void markAllRead() {
-    // Mock: just refresh
-    notifications.refresh();
+  Future<void> loadNotifications() async {
+    isLoading.value = true;
+    errorMessage.value = '';
+    try {
+      final body = await _service.getNotifications();
+      final data = body['data'];
+      notifications.value = data is List
+          ? data
+                .whereType<Map>()
+                .map(
+                  (item) => NotificationItem.fromJson(
+                    Map<String, dynamic>.from(item),
+                  ),
+                )
+                .toList()
+          : [];
+      total.value = _asInt(body['total']);
+      unreadTotal.value = _asInt(body['unreadCount']);
+      _syncDashboardBadge();
+    } catch (_) {
+      errorMessage.value = 'Impossible de charger les notifications';
+      Get.snackbar(
+        'Erreur',
+        'Impossible de charger les notifications',
+        snackPosition: SnackPosition.TOP,
+      );
+    } finally {
+      isLoading.value = false;
+    }
   }
 
   Future<void> refreshNotifications() async {
-    await Future.delayed(const Duration(milliseconds: 800));
+    await loadNotifications();
+  }
+
+  Future<void> markRead(NotificationItem item) async {
+    if (item.isRead || item.id.isEmpty) return;
+    final index = notifications.indexWhere((n) => n.id == item.id);
+    if (index == -1) return;
+
+    notifications[index] = item.copyWith(isRead: true);
+    unreadTotal.value = unreadCount;
+    _syncDashboardBadge();
+    try {
+      await _service.markRead(item.id);
+    } catch (_) {
+      notifications[index] = item;
+      unreadTotal.value = unreadCount;
+      _syncDashboardBadge();
+      Get.snackbar(
+        'Erreur',
+        'Lecture de la notification impossible',
+        snackPosition: SnackPosition.TOP,
+      );
+    }
+  }
+
+  Future<void> markAllRead() async {
+    if (unreadCount == 0) return;
+    final previous = notifications.toList();
+    notifications.value = notifications
+        .map((item) => item.copyWith(isRead: true))
+        .toList(growable: false);
+    unreadTotal.value = 0;
+    _syncDashboardBadge();
+
+    try {
+      await _service.markAllRead();
+    } catch (_) {
+      notifications.value = previous;
+      unreadTotal.value = unreadCount;
+      _syncDashboardBadge();
+      Get.snackbar(
+        'Erreur',
+        'Impossible de tout marquer comme lu',
+        snackPosition: SnackPosition.TOP,
+      );
+    }
+  }
+
+  static int _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  void _syncDashboardBadge() {
+    if (!Get.isRegistered<DashboardController>()) return;
+    Get.find<DashboardController>().notificationCount.value = unreadTotal.value;
   }
 }
