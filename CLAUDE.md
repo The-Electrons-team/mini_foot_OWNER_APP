@@ -16,7 +16,7 @@ No tests are configured. No linting beyond `flutter_lints`.
 
 MiniFoot Owner is a Flutter mobile app for **mini-football pitch owners in Senegal**. It lets owners manage pitches, bookings, availability slots, payments, revenues, notifications, and chat. Built by ELECTRONS TEAM (developer: Mamadou Sy).
 
-**Backend status**: authentication, password reset/change, terrain management, owner reservation listing/detail/refusal, owner profile display/edit/avatar/phone/payout info, dedicated owner dashboard, in-app notifications, revenues/payments, availability, and PDF reports are connected to the NestJS backend. Chat still uses mock data or needs owner-specific endpoints.
+**Backend status**: authentication, password reset/change, terrain management, owner reservation listing/detail/refusal, QR check-in, owner profile display/edit/avatar/phone/payout info, dedicated owner dashboard, in-app notifications, revenues/payments, availability, controllers, and PDF reports are connected to the NestJS backend. Chat and tournaments still use mock data or need owner-specific endpoints.
 
 ## Architecture
 
@@ -61,8 +61,8 @@ features/<name>/
 
 ## Feature Status
 
-**Connected**: auth flow (splash→onboarding→login→register→OTP), forgot/reset password, profile password change, profile avatar upload/display, phone change via OTP, owner payout info, terrain list/form CRUD, terrain image upload, terrain image display via storage proxy, Mapbox preview/geolocation in the terrain form, owner reservation list/detail/refusal, profile display and first/last name update, availability, dedicated `GET /owner/dashboard`, in-app notifications, revenues, payments, and PDF reports.
+**Connected**: auth flow (splash→onboarding→login→register→OTP), forgot/reset password, profile password change, profile avatar upload/display, phone change via OTP, owner payout info, terrain list/form CRUD, terrain image upload, terrain image display via storage proxy, Mapbox preview/geolocation in the terrain form, owner reservation list/detail/refusal, QR check-in, profile display and first/last name update, availability, dedicated `GET /owner/dashboard`, in-app notifications, revenues, payments, controllers, and PDF reports.
 
-**Complete UI but still mock/partial**: FCM push registration, chat list.
+**Complete UI but still mock/partial**: FCM push registration, chat list, tournaments.
 
-**Next backend task**: owner reservation detail page/API polish or FCM token registration.
+**Next backend task**: FCM token registration, chat owner, or tournaments.

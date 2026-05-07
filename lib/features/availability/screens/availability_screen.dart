@@ -83,89 +83,9 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
         children: [
           _buildAppBar(context),
           _buildTerrainSelector(),
-          _buildCompactStats(),
           _buildCalendar(),
           Container(height: 1, color: kDivider),
         ],
-      ),
-    );
-  }
-
-  // ── Stats compactes dans le header ────────────────────────────────────────
-  Widget _buildCompactStats() {
-    return Obx(
-      () => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
-        child: Row(
-          children: [
-            _CompactStat(
-              count: controller.availableCount,
-              label: 'Libres',
-              color: kGreen,
-              bgColor: kGreenLight,
-              icon: Icons.check_circle_outline_rounded,
-            ),
-            const SizedBox(width: 8),
-            _CompactStat(
-              count: controller.bookedCount,
-              label: 'Réservés',
-              color: kGold,
-              bgColor: kGoldLight,
-              icon: Icons.groups_rounded,
-            ),
-            const SizedBox(width: 8),
-            _CompactStat(
-              count: controller.blockedCount,
-              label: 'Bloqués',
-              color: kTextLight,
-              bgColor: kBgSurface,
-              icon: Icons.lock_outline_rounded,
-            ),
-            const SizedBox(width: 8),
-            // Taux d'occupation compact
-            Expanded(
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 7,
-                ),
-                decoration: BoxDecoration(
-                  color: kBgSurface,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      controller.occupancyLabel,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w800,
-                        color: kTextPrim,
-                      ),
-                    ),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.only(left: 8),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(4),
-                          child: LinearProgressIndicator(
-                            value: controller.occupancyRate,
-                            backgroundColor: kBgCard,
-                            valueColor: const AlwaysStoppedAnimation<Color>(
-                              kGreen,
-                            ),
-                            minHeight: 5,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -261,7 +181,7 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
   // ── Sélecteur de terrain ─────────────────────────────────────────────────────
   Widget _buildTerrainSelector() {
     return SizedBox(
-      height: 52,
+      height: 50,
       child: Obx(() {
         if (controller.isLoadingTerrains.value) {
           return ListView.separated(
@@ -310,7 +230,7 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
                 ),
                 decoration: BoxDecoration(
                   color: selected ? kGreen : kBgSurface,
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(18),
                   border: Border.all(
                     color: selected ? kGreen : kBorder,
                     width: selected ? 0 : 1,
@@ -525,18 +445,8 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Légende compacte
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildLegendDot(kGreen, 'Libre'),
-                const SizedBox(width: 14),
-                _buildLegendDot(kGold, 'Réservé'),
-                const SizedBox(width: 14),
-                _buildLegendDot(kTextLight, 'Bloqué'),
-              ],
-            ),
-            const SizedBox(height: 14),
+            _buildDayOverview(),
+            const SizedBox(height: 18),
 
             // ── Matin ────────────────────────────────────────────────────
             if (morning.isNotEmpty) ...[
@@ -593,73 +503,122 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
     BuildContext context,
     int animOffset,
   ) {
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 1.9,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-      ),
-      itemCount: slots.length,
-      itemBuilder: (_, i) {
+    return Column(
+      children: List.generate(slots.length, (i) {
         final slot = slots[i];
         final isNow = _isCurrentHourSlot(slot.time);
-        return _SlotCard(
-              slot: slot,
-              isNow: isNow,
-              onTap: () => _onSlotTap(context, slot),
-              onLongPress: () async {
-                if (slot.isBooked) {
-                  return; // on ne peut pas bloquer un slot réservé
-                }
-                HapticFeedback.heavyImpact();
-                final wasBlocked = slot.isBlocked;
-                final ok = await controller.toggleBlock(slot.time);
-                if (!ok) return;
-                Get.snackbar(
-                  wasBlocked ? 'Débloqué' : 'Bloqué',
-                  '${slot.time} → ${slot.endTime}',
-                  snackPosition: SnackPosition.BOTTOM,
-                  backgroundColor: kBgCard,
-                  colorText: kTextPrim,
-                  margin: const EdgeInsets.all(16),
-                  borderRadius: 16,
-                  duration: const Duration(seconds: 1),
-                  icon: Icon(
-                    wasBlocked ? Icons.lock_open_rounded : Icons.lock_rounded,
-                    color: wasBlocked ? kGreen : kTextLight,
-                  ),
-                );
-              },
-            )
-            .animate()
-            .fadeIn(duration: 200.ms, delay: ((animOffset + i) * 25).ms)
-            .scale(begin: const Offset(0.94, 0.94));
-      },
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child:
+              _SlotCard(
+                    slot: slot,
+                    isNow: isNow,
+                    onTap: () => _onSlotTap(context, slot),
+                    onLongPress: () async {
+                      if (slot.isBooked) return;
+                      HapticFeedback.heavyImpact();
+                      final wasBlocked = slot.isBlocked;
+                      final ok = await controller.toggleBlock(slot.time);
+                      if (!ok) return;
+                      Get.snackbar(
+                        wasBlocked ? 'Débloqué' : 'Bloqué',
+                        '${slot.time} → ${slot.endTime}',
+                        snackPosition: SnackPosition.BOTTOM,
+                        backgroundColor: kBgCard,
+                        colorText: kTextPrim,
+                        margin: const EdgeInsets.all(16),
+                        borderRadius: 16,
+                        duration: const Duration(seconds: 1),
+                        icon: Icon(
+                          wasBlocked
+                              ? Icons.lock_open_rounded
+                              : Icons.lock_rounded,
+                          color: wasBlocked ? kGreen : kTextLight,
+                        ),
+                      );
+                    },
+                  )
+                  .animate()
+                  .fadeIn(duration: 180.ms, delay: ((animOffset + i) * 18).ms)
+                  .slideY(begin: 0.06, end: 0),
+        );
+      }),
     );
   }
 
-  Widget _buildLegendDot(Color color, String label) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-        ),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 11,
-            color: kTextSub,
-            fontWeight: FontWeight.w500,
+  Widget _buildDayOverview() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: kBgCard,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: kBorder),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _OverviewPill(
+                  label: 'Libres',
+                  value: controller.availableCount,
+                  color: kGreen,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _OverviewPill(
+                  label: 'Réservés',
+                  value: controller.bookedCount,
+                  color: kGold,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _OverviewPill(
+                  label: 'Bloqués',
+                  value: controller.blockedCount,
+                  color: kTextSub,
+                ),
+              ),
+            ],
           ),
-        ),
-      ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              const Text(
+                'Occupation',
+                style: TextStyle(
+                  color: kTextSub,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                controller.occupancyLabel,
+                style: const TextStyle(
+                  color: kTextPrim,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(
+                    value: controller.occupancyRate,
+                    minHeight: 6,
+                    color: kGreen,
+                    backgroundColor: kBgSurface,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -753,108 +712,164 @@ class _SlotCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ctrl = Get.find<AvailabilityController>();
-    final bgColor = ctrl.slotBgColor(slot.status);
     final accentColor = ctrl.slotColor(slot.status);
+    final softColor = ctrl.slotBgColor(slot.status);
     final icon = ctrl.slotIcon(slot.status);
+    final title = slot.isBooked && slot.bookedBy.isNotEmpty
+        ? _truncate(slot.bookedBy, 28)
+        : ctrl.slotLabel(slot.status);
+    final subtitle = slot.isBooked
+        ? 'Réservation confirmée'
+        : slot.isBlocked
+        ? 'Indisponible à la réservation'
+        : 'Disponible à la réservation';
 
-    return GestureDetector(
-      onTap: () {
-        HapticFeedback.selectionClick();
-        onTap();
-      },
-      onLongPress: onLongPress,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        decoration: BoxDecoration(
-          color: bgColor,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: isNow ? kGreen : accentColor.withValues(alpha: 0.35),
-            width: isNow ? 2.2 : 1.2,
+    return Material(
+      color: kBgCard,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        onLongPress: onLongPress,
+        borderRadius: BorderRadius.circular(16),
+        splashColor: accentColor.withValues(alpha: 0.08),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: isNow ? kGreen : kBorder),
           ),
-          boxShadow: isNow
-              ? [
-                  BoxShadow(
-                    color: kGreen.withValues(alpha: 0.25),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Stack(
-          children: [
-            // Icône en haut à droite
-            Positioned(
-              top: 5,
-              right: 6,
-              child: Icon(
-                icon,
-                size: 12,
-                color: accentColor.withValues(alpha: 0.55),
-              ),
-            ),
-            // Badge "Maintenant" en haut à gauche
-            if (isNow)
-              Positioned(
-                top: 3,
-                left: 5,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 1,
-                  ),
-                  decoration: BoxDecoration(
-                    color: kGreen,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: const Text(
-                    'NOW',
-                    style: TextStyle(
-                      fontSize: 7,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
+          child: Row(
+            children: [
+              Container(
+                width: 4,
+                height: 54,
+                decoration: BoxDecoration(
+                  color: isNow ? kGreen : accentColor,
+                  borderRadius: BorderRadius.circular(999),
                 ),
               ),
-            // Contenu central
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 56,
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
                       slot.time,
                       style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: isNow ? kGreen : accentColor,
-                        letterSpacing: -0.3,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: isNow ? kGreen : kTextPrim,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 3),
                     Text(
-                      slot.isBooked
-                          ? _truncate(slot.bookedBy, 10)
-                          : ctrl.slotLabel(slot.status),
-                      style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w500,
-                        color: (isNow ? kGreen : accentColor).withValues(
-                          alpha: 0.75,
-                        ),
+                      slot.endTime,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: kTextSub,
+                        fontWeight: FontWeight.w600,
                       ),
-                      overflow: TextOverflow.ellipsis,
-                      maxLines: 1,
-                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
+              const SizedBox(width: 10),
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: softColor,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, size: 19, color: accentColor),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              color: kTextPrim,
+                            ),
+                          ),
+                        ),
+                        if (isNow) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 7,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: kGreenLight,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Text(
+                              'Maintenant',
+                              style: TextStyle(
+                                fontSize: 9,
+                                fontWeight: FontWeight.w800,
+                                color: kGreen,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: kTextSub,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: softColor,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  ctrl.slotLabel(slot.status),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: accentColor,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: kTextLight,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -862,6 +877,53 @@ class _SlotCard extends StatelessWidget {
 
   String _truncate(String s, int max) =>
       s.length > max ? '${s.substring(0, max - 1)}…' : s;
+}
+
+class _OverviewPill extends StatelessWidget {
+  final String label;
+  final int value;
+  final Color color;
+
+  const _OverviewPill({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '$value',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w900,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 11,
+              color: kTextSub,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -920,52 +982,6 @@ class _PeriodHeader extends StatelessWidget {
           style: const TextStyle(fontSize: 10, color: kTextLight),
         ),
       ],
-    );
-  }
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Widget : Stat compacte dans le header
-// ══════════════════════════════════════════════════════════════════════════════
-
-class _CompactStat extends StatelessWidget {
-  final int count;
-  final String label;
-  final Color color;
-  final Color bgColor;
-  final IconData icon;
-
-  const _CompactStat({
-    required this.count,
-    required this.label,
-    required this.color,
-    required this.bgColor,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: color),
-          const SizedBox(width: 5),
-          Text(
-            '$count',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w800,
-              color: color,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -1521,20 +1537,16 @@ class _SlotsShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
+    return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 3,
-        childAspectRatio: 2.0,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
-      ),
-      itemCount: 15,
+      itemCount: 8,
+      separatorBuilder: (_, index) => const SizedBox(height: 8),
       itemBuilder: (_, i) =>
           Container(
+                height: 78,
                 decoration: BoxDecoration(
                   color: kBgSurface,
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(16),
                 ),
               )
               .animate(onPlay: (c) => c.repeat())

@@ -11,6 +11,7 @@ class UserModel {
   final String? payoutOrangePhone;
   final String? payoutFreePhone;
   final String? preferredPayoutMethod;
+  final String role;
 
   UserModel({
     required this.id,
@@ -25,6 +26,7 @@ class UserModel {
     this.payoutOrangePhone,
     this.payoutFreePhone,
     this.preferredPayoutMethod,
+    this.role = 'OWNER',
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -41,6 +43,7 @@ class UserModel {
       payoutOrangePhone: json['payoutOrangePhone'],
       payoutFreePhone: json['payoutFreePhone'],
       preferredPayoutMethod: json['preferredPayoutMethod'],
+      role: json['role'] ?? 'OWNER',
     );
   }
 
@@ -58,6 +61,10 @@ class UserModel {
       'payoutOrangePhone': payoutOrangePhone,
       'payoutFreePhone': payoutFreePhone,
       'preferredPayoutMethod': preferredPayoutMethod,
+      'role': role,
     };
   }
+
+  bool get isController => role == 'CONTROLLER';
+  bool get isOwner => role == 'OWNER';
 }

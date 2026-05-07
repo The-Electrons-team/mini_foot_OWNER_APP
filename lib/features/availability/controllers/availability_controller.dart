@@ -56,7 +56,7 @@ class AvailabilityController extends GetxController {
   final isBulkUpdating = false.obs;
   final errorMessage = ''.obs;
 
-  final calendarFormat = 'month'.obs;
+  final calendarFormat = 'week'.obs;
 
   final terrains = <TerrainOption>[].obs;
 

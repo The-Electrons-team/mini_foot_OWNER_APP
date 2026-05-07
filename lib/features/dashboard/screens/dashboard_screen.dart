@@ -204,14 +204,6 @@ class DashboardScreen extends GetView<DashboardController> {
 
             final actions = [
               _ActionData(
-                icon: PhosphorIcons.soccerBall(PhosphorIconsStyle.duotone),
-                label: 'Terrains',
-                subtitle: terrainSubtitle,
-                color: kGreen,
-                bgColor: kGreenLight,
-                onTap: controller.goToTerrains,
-              ),
-              _ActionData(
                 icon: PhosphorIcons.calendarCheck(PhosphorIconsStyle.duotone),
                 label: 'Réservations',
                 subtitle: reservationSubtitle,
@@ -228,13 +220,39 @@ class DashboardScreen extends GetView<DashboardController> {
                 onTap: controller.goToAvailability,
               ),
               _ActionData(
-                icon: PhosphorIcons.wallet(PhosphorIconsStyle.duotone),
-                label: 'Paiements',
-                subtitle: paymentSubtitle,
-                color: kOrange,
-                bgColor: const Color(0xFFFFF3E0),
-                onTap: controller.goToPayments,
+                icon: PhosphorIcons.qrCode(PhosphorIconsStyle.duotone),
+                label: 'Scanner',
+                subtitle: 'QR réservation',
+                color: kGreen,
+                bgColor: kGreenLight,
+                onTap: controller.goToQrCheckIn,
               ),
+              if (!controller.isController) ...[
+                _ActionData(
+                  icon: PhosphorIcons.soccerBall(PhosphorIconsStyle.duotone),
+                  label: 'Terrains',
+                  subtitle: terrainSubtitle,
+                  color: kGreen,
+                  bgColor: kGreenLight,
+                  onTap: controller.goToTerrains,
+                ),
+                _ActionData(
+                  icon: PhosphorIcons.usersThree(PhosphorIconsStyle.duotone),
+                  label: 'Controllers',
+                  subtitle: 'Accès & suivi',
+                  color: kBlue,
+                  bgColor: kBlueLight,
+                  onTap: controller.goToControllers,
+                ),
+                _ActionData(
+                  icon: PhosphorIcons.wallet(PhosphorIconsStyle.duotone),
+                  label: 'Paiements',
+                  subtitle: paymentSubtitle,
+                  color: kOrange,
+                  bgColor: const Color(0xFFFFF3E0),
+                  onTap: controller.goToPayments,
+                ),
+              ],
             ];
 
             return SizedBox(
@@ -603,21 +621,29 @@ class DashboardScreen extends GetView<DashboardController> {
                       icon: PhosphorIcons.courtBasketball(
                         PhosphorIconsStyle.duotone,
                       ),
-                      label: 'Terrains',
+                      label: controller.isController ? 'Réserv.' : 'Terrains',
                       isSelected: controller.selectedTab.value == 1,
                       onTap: () {
                         controller.changeTab(1);
-                        controller.goToTerrains();
+                        controller.isController
+                            ? controller.goToReservations()
+                            : controller.goToTerrains();
                       },
                     ),
                     const SizedBox(width: 72),
                     _NavItem(
-                      icon: PhosphorIcons.wallet(PhosphorIconsStyle.duotone),
-                      label: 'Paiements',
+                      icon: controller.isController
+                          ? PhosphorIcons.clockCountdown(
+                              PhosphorIconsStyle.duotone,
+                            )
+                          : PhosphorIcons.wallet(PhosphorIconsStyle.duotone),
+                      label: controller.isController ? 'Créneaux' : 'Paiements',
                       isSelected: controller.selectedTab.value == 3,
                       onTap: () {
                         controller.changeTab(3);
-                        controller.goToPayments();
+                        controller.isController
+                            ? controller.goToAvailability()
+                            : controller.goToPayments();
                       },
                     ),
                     _NavItem(
