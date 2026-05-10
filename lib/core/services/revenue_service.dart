@@ -136,6 +136,7 @@ class RevenueService {
     final lastName = (user?['lastName'] ?? '').toString().trim();
     final clientName = '$firstName $lastName'.trim();
     final date =
+        _parseDate(payment['ownerReleasedAt']) ??
         _parseDate(payment['paidAt']) ??
         _parseDate(payment['createdAt']) ??
         _parseDate(reservation['date']) ??
@@ -147,9 +148,9 @@ class RevenueService {
       dateLabel: DateFormat('d MMM yyyy', 'fr_FR').format(date),
       client: clientName.isEmpty ? 'Client MiniFoot' : clientName,
       terrain: (terrain?['name'] ?? 'Terrain').toString(),
-      amount: _asInt(payment['amount'] ?? reservation['finalPrice']),
+      amount: _ownerNetPaymentAmount(payment, reservation),
       method: _formatMethod(payment['method'] ?? reservation['paymentMethod']),
-      status: _formatStatus(payment['status']),
+      status: _ownerPaymentStatus(payment),
       timeSlot: _formatSlot(reservation['startSlot'], reservation['endSlot']),
       reference: (reservation['reference'] ?? '').toString(),
     );
@@ -272,14 +273,17 @@ class RevenueService {
 
     final completed = payments.where((payment) {
       return payment is Map<String, dynamic> &&
-          payment['status'] == 'COMPLETED';
+          payment['status'] == 'COMPLETED' &&
+          payment['ownerReleasedAt'] != null;
     });
     final total = completed.fold<int>(0, (sum, payment) {
-      return sum + _asInt((payment as Map<String, dynamic>)['amount']);
+      return sum +
+          _ownerNetPaymentAmount(
+            payment as Map<String, dynamic>,
+            reservation,
+          );
     });
-    return total == 0
-        ? _asInt(reservation['finalPrice'] ?? reservation['totalPrice'])
-        : total;
+    return total;
   }
 
   static DateTime? _parseDate(dynamic value) =>
@@ -289,6 +293,15 @@ class RevenueService {
     if (value is int) return value;
     if (value is num) return value.toInt();
     return int.tryParse(value?.toString() ?? '') ?? 0;
+  }
+
+  static int _ownerNetPaymentAmount(
+    Map<String, dynamic> payment,
+    Map<String, dynamic> reservation,
+  ) {
+    final ownerNet = _asInt(payment['ownerNetAmount']);
+    if (ownerNet > 0) return ownerNet;
+    return _asInt(payment['amount'] ?? reservation['finalPrice']);
   }
 
   static String _formatSlot(dynamic start, dynamic end) {
@@ -322,5 +335,13 @@ class RevenueService {
       default:
         return 'pending';
     }
+  }
+
+  static String _ownerPaymentStatus(Map<String, dynamic> payment) {
+    final rawStatus = payment['status']?.toString();
+    if (rawStatus == 'COMPLETED' && payment['ownerReleasedAt'] == null) {
+      return 'pending';
+    }
+    return _formatStatus(rawStatus);
   }
 }

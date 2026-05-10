@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../features/auth/bindings/auth_binding.dart';
 import '../features/auth/screens/splash_screen.dart';
@@ -33,6 +34,7 @@ import '../features/qr_checkin/screens/qr_checkin_screen.dart';
 import '../features/controllers/bindings/controllers_binding.dart';
 import '../features/controllers/screens/controller_detail_screen.dart';
 import '../features/controllers/screens/controllers_screen.dart';
+import '../features/auth/controllers/auth_controller.dart';
 
 abstract class Routes {
   static const splash = '/';
@@ -118,6 +120,7 @@ final appPages = [
     name: Routes.terrainForm,
     page: () => const TerrainFormScreen(),
     binding: TerrainBinding(),
+    middlewares: [_OwnerOnlyMiddleware()],
     transition: Transition.rightToLeftWithFade,
     transitionDuration: const Duration(milliseconds: 300),
   ),
@@ -146,6 +149,7 @@ final appPages = [
     name: Routes.payments,
     page: () => const PaymentsScreen(),
     binding: PaymentsBinding(),
+    middlewares: [_OwnerOnlyMiddleware()],
     transition: Transition.cupertino,
     transitionDuration: const Duration(milliseconds: 300),
   ),
@@ -181,6 +185,7 @@ final appPages = [
     name: Routes.paymentMethods,
     page: () => const PaymentMethodsScreen(),
     binding: ProfileBinding(),
+    middlewares: [_OwnerOnlyMiddleware()],
     transition: Transition.rightToLeftWithFade,
     transitionDuration: const Duration(milliseconds: 300),
   ),
@@ -188,6 +193,7 @@ final appPages = [
     name: Routes.revenues,
     page: () => const RevenuesScreen(),
     binding: RevenuesBinding(),
+    middlewares: [_OwnerOnlyMiddleware()],
     transition: Transition.cupertino,
     transitionDuration: const Duration(milliseconds: 300),
   ),
@@ -209,6 +215,7 @@ final appPages = [
     name: Routes.controllers,
     page: () => const ControllersScreen(),
     binding: ControllersBinding(),
+    middlewares: [_OwnerOnlyMiddleware()],
     transition: Transition.cupertino,
     transitionDuration: const Duration(milliseconds: 300),
   ),
@@ -216,7 +223,24 @@ final appPages = [
     name: Routes.controllerDetail,
     page: () => const ControllerDetailScreen(),
     binding: ControllersBinding(),
+    middlewares: [_OwnerOnlyMiddleware()],
     transition: Transition.cupertino,
     transitionDuration: const Duration(milliseconds: 300),
   ),
 ];
+
+class _OwnerOnlyMiddleware extends GetMiddleware {
+  @override
+  RouteSettings? redirect(String? route) {
+    if (!Get.isRegistered<AuthController>()) return null;
+    final auth = Get.find<AuthController>();
+    if (auth.user.value?.isOwner == true) return null;
+
+    Get.snackbar(
+      'Accès réservé',
+      'Cette action est réservée au propriétaire du terrain.',
+      snackPosition: SnackPosition.TOP,
+    );
+    return const RouteSettings(name: Routes.dashboard);
+  }
+}

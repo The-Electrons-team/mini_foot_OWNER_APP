@@ -2,6 +2,7 @@ import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/models/user_model.dart';
 import '../../../core/services/auth_service.dart';
+import '../../../core/services/notification_service.dart';
 import '../../../routes/app_routes.dart';
 
 class AuthController extends GetxController {
@@ -31,6 +32,13 @@ class AuthController extends GetxController {
       final userData = await _authService.getProfile(savedToken);
       token.value = savedToken;
       user.value = UserModel.fromJson(userData);
+      if (user.value?.canUseOwnerApp != true) {
+        await prefs.remove('token');
+        token.value = null;
+        user.value = null;
+        return false;
+      }
+      await NotificationService.syncToken(savedToken);
       return true;
     } catch (e) {
       prefs.remove('token');
@@ -45,9 +53,15 @@ class AuthController extends GetxController {
       if (res['token'] != null) {
         token.value = res['token'];
         user.value = UserModel.fromJson(res['user']);
+        if (user.value?.canUseOwnerApp != true) {
+          token.value = null;
+          user.value = null;
+          throw Exception('ROLE_NON_AUTORISE');
+        }
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('token', token.value!);
+        await NotificationService.syncToken(token.value!);
 
         Get.offAllNamed(Routes.dashboard);
       }
@@ -57,6 +71,8 @@ class AuthController extends GetxController {
         message = 'Compte non trouvé. Veuillez vous inscrire.';
       } else if (e.toString().contains('ID_INVALIDES')) {
         message = 'Mot de passe incorrect.';
+      } else if (e.toString().contains('ROLE_NON_AUTORISE')) {
+        message = 'Ce compte est un compte joueur. Utilisez un compte propriétaire ou contrôleur.';
       }
       Get.snackbar('Erreur', message, snackPosition: SnackPosition.TOP);
       rethrow;
@@ -151,9 +167,15 @@ class AuthController extends GetxController {
 
         token.value = res['token'];
         user.value = UserModel.fromJson(res['user']);
+        if (user.value?.canUseOwnerApp != true) {
+          token.value = null;
+          user.value = null;
+          throw Exception('ROLE_NON_AUTORISE');
+        }
 
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('token', token.value!);
+        await NotificationService.syncToken(token.value!);
 
         Get.offAllNamed(Routes.dashboard);
       }

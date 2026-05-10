@@ -68,7 +68,7 @@ class AuthService {
     String? birthDate,
   }) async {
     final response = await http.post(
-      Uri.parse('$_baseUrl/auth/register'),
+      Uri.parse('$_baseUrl/auth/register-owner'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(
         {
@@ -192,6 +192,21 @@ class AuthService {
       return jsonDecode(response.body);
     }
     throw Exception('Erreur coordonnées paiement: ${response.body}');
+  }
+
+  Future<void> updateFcmToken(String token, String fcmToken) async {
+    final response = await http.patch(
+      Uri.parse('$_baseUrl/users/me/fcm-token'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({'token': fcmToken}),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Erreur token notification: ${response.body}');
+    }
   }
 
   Future<Map<String, dynamic>> updatePayoutInfo(

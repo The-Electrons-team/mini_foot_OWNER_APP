@@ -1,8 +1,10 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../routes/app_routes.dart';
 import '../theme/app_theme.dart';
+import 'auth_service.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Handler des notifs en arrière-plan (top-level function obligatoire)
@@ -37,8 +39,12 @@ class NotificationService {
     debugPrint('Permission notifs : ${settings.authorizationStatus}');
 
     // 3. Récupérer le token FCM (en arrière-plan pour ne pas bloquer l'app)
-    _messaging.getToken().then((token) {
-      if (token != null) debugPrint('FCM Token : $token');
+    _messaging.getToken().then((token) async {
+      if (token != null) {
+        debugPrint('FCM Token : $token');
+        final jwt = await _savedJwt();
+        if (jwt != null) await _sendToken(jwt, token);
+      }
     }).catchError((e) {
       debugPrint('Note : Token FCM non disponible (normal sur compte Apple gratuit ou simulateur).');
     });
@@ -59,10 +65,33 @@ class NotificationService {
     }
 
     // 7. Token refresh
-    _messaging.onTokenRefresh.listen((newToken) {
+    _messaging.onTokenRefresh.listen((newToken) async {
       debugPrint('FCM Token rafraîchi : $newToken');
-      // TODO: envoyer le nouveau token à ton backend
+      final jwt = await _savedJwt();
+      if (jwt != null) await _sendToken(jwt, newToken);
     });
+  }
+
+  static Future<void> syncToken(String jwt) async {
+    try {
+      final fcmToken = await _messaging.getToken();
+      if (fcmToken != null) await _sendToken(jwt, fcmToken);
+    } catch (e) {
+      debugPrint('Token FCM propriétaire non synchronisé : $e');
+    }
+  }
+
+  static Future<String?> _savedJwt() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString('token');
+  }
+
+  static Future<void> _sendToken(String jwt, String fcmToken) async {
+    try {
+      await AuthService().updateFcmToken(jwt, fcmToken);
+    } catch (e) {
+      debugPrint('Erreur envoi token FCM propriétaire : $e');
+    }
   }
 
   // ── Notif reçue en premier plan ─────────────────────────────────────────────

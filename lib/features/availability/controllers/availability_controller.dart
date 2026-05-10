@@ -46,7 +46,7 @@ class TerrainOption {
 // ══════════════════════════════════════════════════════════════════════════════
 
 class AvailabilityController extends GetxController {
-  static const List<int> durationOptions = [2, 3];
+  static const List<int> durationOptions = [2, 3, 4, 5, 6, 7];
 
   final _service = TerrainService();
 
