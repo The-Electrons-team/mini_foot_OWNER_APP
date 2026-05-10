@@ -13,6 +13,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/lottie_success_dialog.dart';
+import '../controllers/owner_zone_options.dart';
 import '../controllers/terrain_controller.dart';
 import '../../auth/controllers/auth_controller.dart';
 
@@ -20,6 +21,69 @@ class TerrainFormScreen extends StatefulWidget {
   const TerrainFormScreen({super.key});
   @override
   State<TerrainFormScreen> createState() => _TerrainFormScreenState();
+}
+
+class _SubTerrainDraft {
+  final String? id;
+  final TextEditingController nameCtrl;
+  final TextEditingController capacityCtrl;
+  final TextEditingController priceCtrl;
+  final RxString type;
+  final RxString surface;
+  final RxBool isActive;
+
+  _SubTerrainDraft({
+    this.id,
+    required String name,
+    int capacity = 10,
+    String type = '5v5',
+    String surface = 'Gazon synthétique',
+    int? pricePerHour,
+    bool isActive = true,
+  }) : nameCtrl = TextEditingController(text: name),
+       capacityCtrl = TextEditingController(text: '$capacity'),
+       priceCtrl = TextEditingController(
+         text: pricePerHour == null ? '' : '$pricePerHour',
+       ),
+       type = type.obs,
+       surface = surface.obs,
+       isActive = isActive.obs;
+
+  factory _SubTerrainDraft.fromModel(SubTerrainModel model) {
+    return _SubTerrainDraft(
+      id: model.id,
+      name: model.name,
+      capacity: model.capacity,
+      type: model.type,
+      surface: model.surface ?? 'Gazon synthétique',
+      pricePerHour: model.pricePerHour,
+      isActive: model.isActive,
+    );
+  }
+
+  SubTerrainModel? toModel() {
+    final name = nameCtrl.text.trim();
+    final capacity = int.tryParse(capacityCtrl.text.trim());
+    final priceText = priceCtrl.text.trim();
+    final customPrice = priceText.isEmpty ? null : int.tryParse(priceText);
+    if (name.isEmpty || capacity == null || capacity <= 0) return null;
+
+    return SubTerrainModel(
+      id: id,
+      name: name,
+      capacity: capacity,
+      type: type.value,
+      surface: surface.value,
+      pricePerHour: customPrice,
+      isActive: isActive.value,
+    );
+  }
+
+  void dispose() {
+    nameCtrl.dispose();
+    capacityCtrl.dispose();
+    priceCtrl.dispose();
+  }
 }
 
 class _TerrainFormScreenState extends State<TerrainFormScreen> {
@@ -45,6 +109,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
   final _isSearching = false.obs;
   final _isLocating = false.obs;
   final _isSaving = false.obs;
+  final _miniTerrains = <_SubTerrainDraft>[].obs;
 
   final _equipments = <String, bool>{
     'Éclairage': true,
@@ -63,6 +128,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     'Terre battue',
   ];
   static const _allCapacities = ['5v5', '7v7', '11v11'];
+  static const _miniTerrainTypes = ['5v5', '7v7', '9v9', '11v11'];
 
   String get _mapboxToken => dotenv.env['MAPBOX_ACCESS_TOKEN']?.trim() ?? '';
 
@@ -99,6 +165,16 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
       if (t.lat != null && t.lng != null) {
         _mapCenter.value = LatLng(t.lat!, t.lng!);
       }
+
+      _miniTerrains.value = t.subTerrains
+          .map(_SubTerrainDraft.fromModel)
+          .toList();
+    }
+
+    if (_miniTerrains.isEmpty) {
+      _miniTerrains.add(
+        _SubTerrainDraft(name: 'Terrain A', capacity: 10, type: '5v5'),
+      );
     }
   }
 
@@ -112,6 +188,9 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     _openCtrl.dispose();
     _closeCtrl.dispose();
     _searchCtrl.dispose();
+    for (final miniTerrain in _miniTerrains) {
+      miniTerrain.dispose();
+    }
     super.dispose();
   }
 
@@ -259,7 +338,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
             ),
             centerTitle: true,
             title: Text(
-              _isEditing ? 'Modifier Terrain' : 'Nouveau Terrain',
+              _isEditing ? 'Modifier Parcelle' : 'Nouvelle Parcelle',
               style: const TextStyle(
                 fontFamily: 'Orbitron',
                 fontSize: 16,
@@ -284,19 +363,24 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
                   delay: 50.ms,
                 ),
                 const SizedBox(height: 20),
-                _buildCapacitySection().animate().fadeIn(
+                _buildMiniTerrainsSection().animate().fadeIn(
                   duration: 350.ms,
                   delay: 100.ms,
                 ),
                 const SizedBox(height: 20),
-                _buildEquipmentsSection().animate().fadeIn(
+                _buildCapacitySection().animate().fadeIn(
                   duration: 350.ms,
                   delay: 150.ms,
                 ),
                 const SizedBox(height: 20),
-                _buildLocationSection().animate().fadeIn(
+                _buildEquipmentsSection().animate().fadeIn(
                   duration: 350.ms,
                   delay: 200.ms,
+                ),
+                const SizedBox(height: 20),
+                _buildLocationSection().animate().fadeIn(
+                  duration: 350.ms,
+                  delay: 250.ms,
                 ),
                 const SizedBox(height: 20),
               ],
@@ -507,13 +591,6 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     }
   }
 
-  static const _zones = {
-    'DAKAR': 'Dakar',
-    'GUEEDIAWAYE': 'Guédiawaye',
-    'PIKINE': 'Pikine',
-    'RUFISQUE': 'Rufisque',
-  };
-
   // ── 2. Informations ──────────────────────────────────────────────────────
   Widget _buildInfoSection() => _Card(
     title: 'Informations',
@@ -521,9 +598,9 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     child: Column(
       children: [
         _Field(
-          label: 'Nom du terrain *',
+          label: 'Nom de la parcelle *',
           ctrl: _nameCtrl,
-          hint: 'Ex: Terrain Synthétique A',
+          hint: 'Ex: Complexe Foot Almadies',
           icon: PhosphorIconsLight.pen,
         ),
         const SizedBox(height: 16),
@@ -531,7 +608,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
         _buildDropdown(
           label: 'Zone *',
           obs: _zone,
-          items: _zones.entries
+          items: ownerZoneLabels.entries
               .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
               .toList(),
         ),
@@ -540,7 +617,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
         _Field(
           label: 'Prix par heure (XOF) *',
           ctrl: _priceCtrl,
-          hint: 'Ex: 15000',
+          hint: 'Prix par défaut, ex: 15000',
           icon: PhosphorIconsLight.currencyDollar,
           keyboardType: TextInputType.number,
         ),
@@ -549,7 +626,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
         _MultilineField(
           label: 'Description',
           ctrl: _descCtrl,
-          hint: 'Décrivez votre terrain (optionnel)…',
+          hint: 'Décrivez la parcelle et ses espaces…',
         ),
         const SizedBox(height: 16),
         // Surface
@@ -629,9 +706,169 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     ],
   );
 
+  Widget _buildMiniTerrainsSection() => _Card(
+    title: 'Mini-terrains',
+    icon: PhosphorIconsLight.soccerBall,
+    trailing: _IconPillButton(
+      icon: PhosphorIconsLight.plus,
+      label: 'Ajouter',
+      onTap: _addMiniTerrain,
+    ),
+    child: Obx(
+      () => Column(
+        children: [
+          ...List.generate(_miniTerrains.length, (index) {
+            final miniTerrain = _miniTerrains[index];
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: index == _miniTerrains.length - 1 ? 0 : 12,
+              ),
+              child: _buildMiniTerrainCard(miniTerrain, index),
+            );
+          }),
+        ],
+      ),
+    ),
+  );
+
+  Widget _buildMiniTerrainCard(_SubTerrainDraft miniTerrain, int index) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAF7),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFFE5E0D8)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE8F5E9),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: const Icon(
+                  PhosphorIconsLight.soccerBall,
+                  color: Color(0xFF006F39),
+                  size: 17,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Mini-terrain ${index + 1}',
+                  style: const TextStyle(
+                    color: Color(0xFF1A1A1A),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Obx(
+                () => Switch.adaptive(
+                  value: miniTerrain.isActive.value,
+                  activeThumbColor: const Color(0xFF006F39),
+                  onChanged: (value) => miniTerrain.isActive.value = value,
+                ),
+              ),
+              if (_miniTerrains.length > 1)
+                IconButton(
+                  onPressed: () => _removeMiniTerrain(miniTerrain),
+                  icon: const Icon(
+                    PhosphorIconsLight.trash,
+                    color: Color(0xFFEF4444),
+                    size: 18,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _Field(
+            label: 'Nom *',
+            ctrl: miniTerrain.nameCtrl,
+            hint: 'Ex: Terrain A',
+            icon: PhosphorIconsLight.pen,
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildDropdown(
+                  label: 'Format',
+                  obs: miniTerrain.type,
+                  items: _miniTerrainTypes
+                      .map(
+                        (type) =>
+                            DropdownMenuItem(value: type, child: Text(type)),
+                      )
+                      .toList(),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _Field(
+                  label: 'Capacité',
+                  ctrl: miniTerrain.capacityCtrl,
+                  hint: '10',
+                  icon: PhosphorIconsLight.users,
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildDropdown(
+                  label: 'Surface',
+                  obs: miniTerrain.surface,
+                  items: _surfaces
+                      .map(
+                        (surface) => DropdownMenuItem(
+                          value: surface,
+                          child: Text(surface),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _Field(
+                  label: 'Prix perso',
+                  ctrl: miniTerrain.priceCtrl,
+                  hint: 'Optionnel',
+                  icon: PhosphorIconsLight.currencyDollar,
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _addMiniTerrain() {
+    final name = String.fromCharCode(65 + _miniTerrains.length);
+    _miniTerrains.add(
+      _SubTerrainDraft(name: 'Terrain $name', capacity: 10, type: '5v5'),
+    );
+  }
+
+  void _removeMiniTerrain(_SubTerrainDraft miniTerrain) {
+    miniTerrain.dispose();
+    _miniTerrains.remove(miniTerrain);
+  }
+
   // ── 3. Formats de jeu — Chips ─────────────────────────────────────────────
   Widget _buildCapacitySection() => _Card(
-    title: 'Formats de jeu',
+    title: 'Formats disponibles',
     icon: PhosphorIconsLight.users,
     child: Obx(
       () => Wrap(
@@ -1053,7 +1290,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
                   Icon(PhosphorIconsLight.floppyDisk, size: 20),
                   SizedBox(width: 10),
                   Text(
-                    'Enregistrer le terrain',
+                    'Enregistrer la parcelle',
                     style: TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -1071,7 +1308,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     if (name.isEmpty) {
       Get.snackbar(
         'Champ requis',
-        'Veuillez saisir un nom de terrain',
+        'Veuillez saisir un nom de parcelle',
         snackPosition: SnackPosition.TOP,
       );
       return;
@@ -1082,6 +1319,19 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
       Get.snackbar(
         'Champ requis',
         'Veuillez saisir un prix valide (en XOF)',
+        snackPosition: SnackPosition.TOP,
+      );
+      return;
+    }
+
+    final subTerrains = _miniTerrains
+        .map((miniTerrain) => miniTerrain.toModel())
+        .whereType<SubTerrainModel>()
+        .toList();
+    if (subTerrains.length != _miniTerrains.length) {
+      Get.snackbar(
+        'Mini-terrain incomplet',
+        'Chaque mini-terrain doit avoir un nom et une capacité valide',
         snackPosition: SnackPosition.TOP,
       );
       return;
@@ -1118,6 +1368,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
             ? null
             : _descCtrl.text.trim(),
         features: features,
+        subTerrains: subTerrains,
         images: _images.map((x) => File(x.path)).toList(),
         managerId: authCtrl.user.value?.id,
       );
@@ -1127,7 +1378,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
           message: _isEditing ? 'Terrain modifié !' : 'Terrain créé !',
           subtitle: _isEditing
               ? 'Les modifications ont été enregistrées'
-              : 'Votre nouveau terrain est prêt',
+              : 'Votre parcelle et ses mini-terrains sont prêts',
         ),
         barrierDismissible: false,
       );
@@ -1359,8 +1610,14 @@ class _Card extends StatelessWidget {
   final String title;
   final IconData icon;
   final Widget child;
+  final Widget? trailing;
 
-  const _Card({required this.title, required this.icon, required this.child});
+  const _Card({
+    required this.title,
+    required this.icon,
+    required this.child,
+    this.trailing,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1394,6 +1651,8 @@ class _Card extends StatelessWidget {
                   color: Color(0xFF1A1A1A),
                 ),
               ),
+              const Spacer(),
+              ?trailing,
             ],
           ),
           const SizedBox(height: 16),
