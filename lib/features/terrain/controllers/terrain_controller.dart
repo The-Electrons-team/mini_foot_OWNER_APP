@@ -3,6 +3,48 @@ import 'package:get/get.dart';
 import '../../../core/services/terrain_service.dart';
 import '../../../routes/app_routes.dart';
 
+class SubTerrainModel {
+  final String? id;
+  final String name;
+  final int capacity;
+  final String type;
+  final String? surface;
+  final int? pricePerHour;
+  final bool isActive;
+
+  const SubTerrainModel({
+    this.id,
+    required this.name,
+    required this.capacity,
+    required this.type,
+    this.surface,
+    this.pricePerHour,
+    this.isActive = true,
+  });
+
+  factory SubTerrainModel.fromJson(Map<String, dynamic> json) {
+    return SubTerrainModel(
+      id: json['id'],
+      name: json['name'] ?? '',
+      capacity: (json['capacity'] ?? 10) as int,
+      type: json['type'] ?? '5v5',
+      surface: json['surface'],
+      pricePerHour: json['pricePerHour'] as int?,
+      isActive: json['isActive'] ?? true,
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    if (id != null && id!.isNotEmpty) 'id': id,
+    'name': name,
+    'capacity': capacity,
+    'type': type,
+    if (surface != null && surface!.isNotEmpty) 'surface': surface,
+    if (pricePerHour != null && pricePerHour! > 0) 'pricePerHour': pricePerHour,
+    'isActive': isActive,
+  };
+}
+
 class TerrainModel {
   final String id;
   final String name;
@@ -18,6 +60,7 @@ class TerrainModel {
   final double? lat;
   final double? lng;
   final String? managerId;
+  final List<SubTerrainModel> subTerrains;
 
   TerrainModel({
     required this.id,
@@ -34,6 +77,7 @@ class TerrainModel {
     this.lat,
     this.lng,
     this.managerId,
+    this.subTerrains = const [],
   });
 
   factory TerrainModel.fromJson(Map<String, dynamic> json) {
@@ -52,6 +96,10 @@ class TerrainModel {
       lat: (json['lat'] as num?)?.toDouble(),
       lng: (json['lng'] as num?)?.toDouble(),
       managerId: json['managerId'],
+      subTerrains: (json['subTerrains'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(SubTerrainModel.fromJson)
+          .toList(),
     );
   }
 
@@ -68,6 +116,37 @@ class TerrainModel {
 
   String get displayImage =>
       imageUrl ?? (imageUrls.isNotEmpty ? imageUrls.first : '');
+
+  int get miniTerrainCount => subTerrains.length;
+
+  int get activeMiniTerrainCount =>
+      subTerrains.where((subTerrain) => subTerrain.isActive).length;
+
+  String get parcelleStatusLabel {
+    if (!isActive) return 'En pause';
+    if (subTerrains.isEmpty) return 'Terrain simple';
+    if (activeMiniTerrainCount == subTerrains.length) return 'Parcelle active';
+    if (activeMiniTerrainCount == 0) return 'Mini-terrains en pause';
+    return 'Partiellement active';
+  }
+
+  String get miniTerrainLabel {
+    if (subTerrains.isEmpty) return '1 terrain';
+    return '$miniTerrainCount mini-terrain${miniTerrainCount > 1 ? 's' : ''}';
+  }
+
+  String get displayPriceRange {
+    final prices = [
+      pricePerHour,
+      ...subTerrains
+          .map((subTerrain) => subTerrain.pricePerHour)
+          .whereType<int>(),
+    ]..sort();
+
+    if (prices.isEmpty) return '$pricePerHour F/h';
+    if (prices.first == prices.last) return '${prices.first} F/h';
+    return '${prices.first} - ${prices.last} F/h';
+  }
 }
 
 class TerrainController extends GetxController {
@@ -133,7 +212,10 @@ class TerrainController extends GetxController {
         (t) =>
             t.name.toLowerCase().contains(query) ||
             t.address.toLowerCase().contains(query) ||
-            t.zone.toLowerCase().contains(query),
+            t.zone.toLowerCase().contains(query) ||
+            t.subTerrains.any(
+              (subTerrain) => subTerrain.name.toLowerCase().contains(query),
+            ),
       );
     }
 
@@ -143,6 +225,10 @@ class TerrainController extends GetxController {
   int get totalTerrains => allTerrains.length;
   int get activeTerrains => allTerrains.where((t) => t.isActive).length;
   int get inactiveTerrains => allTerrains.where((t) => !t.isActive).length;
+  int get totalMiniTerrains => allTerrains.fold<int>(
+    0,
+    (sum, terrain) => sum + terrain.miniTerrainCount,
+  );
 
   Future<void> toggleStatus(String id) async {
     final idx = terrains.indexWhere((t) => t.id == id);
@@ -207,6 +293,7 @@ class TerrainController extends GetxController {
     required double lng,
     String? description,
     required List<String> features,
+    required List<SubTerrainModel> subTerrains,
     List<File> images = const [],
     String? managerId,
   }) async {
@@ -220,6 +307,9 @@ class TerrainController extends GetxController {
       if (description != null && description.isNotEmpty)
         'description': description,
       'features': features,
+      'subTerrains': subTerrains
+          .map((subTerrain) => subTerrain.toJson())
+          .toList(),
     };
 
     final terrain = selectedTerrain.value;

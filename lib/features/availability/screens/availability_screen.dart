@@ -241,7 +241,9 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      Icons.sports_soccer_rounded,
+                      terrain.isMiniTerrain
+                          ? Icons.grid_view_rounded
+                          : Icons.sports_soccer_rounded,
                       size: 14,
                       color: selected ? Colors.white : kTextSub,
                     ),
@@ -531,7 +533,10 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
                       }
                       HapticFeedback.heavyImpact();
                       final wasBlocked = slot.isBlocked;
-                      final ok = await controller.toggleBlockRange(slot.time, 2);
+                      final ok = await controller.toggleBlockRange(
+                        slot.time,
+                        2,
+                      );
                       if (!ok) return;
                       Get.snackbar(
                         wasBlocked ? 'Débloqué' : 'Bloqué',
@@ -1210,9 +1215,14 @@ class _SlotDetailSheetState extends State<_SlotDetailSheet> {
                   ),
                   const SizedBox(height: 10),
                   Row(
-                    children: AvailabilityController.durationOptions.map((slotCount) {
+                    children: AvailabilityController.durationOptions.map((
+                      slotCount,
+                    ) {
                       final isSelected = selectedDurationSlots == slotCount;
-                      final isEnabled = controller.canToggleRange(slot.time, slotCount);
+                      final isEnabled = controller.canToggleRange(
+                        slot.time,
+                        slotCount,
+                      );
                       return Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: GestureDetector(
@@ -1220,7 +1230,9 @@ class _SlotDetailSheetState extends State<_SlotDetailSheet> {
                               ? null
                               : () {
                                   HapticFeedback.selectionClick();
-                                  setState(() => selectedDurationSlots = slotCount);
+                                  setState(
+                                    () => selectedDurationSlots = slotCount,
+                                  );
                                 },
                           child: AnimatedContainer(
                             duration: const Duration(milliseconds: 180),
@@ -1391,14 +1403,14 @@ class _SlotDetailSheetState extends State<_SlotDetailSheet> {
                               onPressed: !actionEnabled
                                   ? null
                                   : () async {
-                                HapticFeedback.mediumImpact();
-                                await controller.toggleBlockRange(
-                                  slot.time,
-                                  selectedDurationSlots,
-                                );
-                                if (!context.mounted) return;
-                                Navigator.of(context).pop();
-                              },
+                                      HapticFeedback.mediumImpact();
+                                      await controller.toggleBlockRange(
+                                        slot.time,
+                                        selectedDurationSlots,
+                                      );
+                                      if (!context.mounted) return;
+                                      Navigator.of(context).pop();
+                                    },
                               style: ElevatedButton.styleFrom(
                                 disabledBackgroundColor: kDivider,
                                 backgroundColor: slot.isBlocked ? kGreen : kRed,

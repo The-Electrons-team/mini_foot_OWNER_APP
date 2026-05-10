@@ -1,0 +1,16 @@
+const ownerZoneLabels = <String, String>{
+  'DAKAR': 'Dakar',
+  'DIOURBEL': 'Diourbel',
+  'FATICK': 'Fatick',
+  'KAFFRINE': 'Kaffrine',
+  'KAOLACK': 'Kaolack',
+  'KEDOUGOU': 'Kedougou',
+  'KOLDA': 'Kolda',
+  'LOUGA': 'Louga',
+  'MATAM': 'Matam',
+  'SAINT_LOUIS': 'Saint-Louis',
+  'SEDHIOU': 'Sedhiou',
+  'TAMBACOUNDA': 'Tambacounda',
+  'THIES': 'Thies',
+  'ZIGUINCHOR': 'Ziguinchor',
+};

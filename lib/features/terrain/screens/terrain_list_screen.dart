@@ -43,7 +43,7 @@ class TerrainListScreen extends GetView<TerrainController> {
             ),
             centerTitle: true,
             title: const Text(
-              'Mes Terrains',
+              'Mes Parcelles',
               style: TextStyle(
                 fontFamily: 'Orbitron',
                 fontSize: 18,
@@ -78,7 +78,7 @@ class TerrainListScreen extends GetView<TerrainController> {
                       children: [
                         Expanded(
                           child: _StatPill(
-                            label: 'Total',
+                            label: 'Parcelles',
                             value: '${controller.totalTerrains}',
                             icon: PhosphorIconsLight.soccerBall,
                             color: const Color(0xFF006F39),
@@ -96,9 +96,9 @@ class TerrainListScreen extends GetView<TerrainController> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: _StatPill(
-                            label: 'Pause',
-                            value: '${controller.inactiveTerrains}',
-                            icon: PhosphorIconsLight.pauseCircle,
+                            label: 'Mini-terrains',
+                            value: '${controller.totalMiniTerrains}',
+                            icon: PhosphorIconsLight.gridFour,
                             color: const Color(0xFFB7791F),
                           ),
                         ),
@@ -138,7 +138,7 @@ class TerrainListScreen extends GetView<TerrainController> {
                               fontWeight: FontWeight.w500,
                             ),
                             decoration: const InputDecoration(
-                              hintText: 'Rechercher un terrain...',
+                              hintText: 'Rechercher une parcelle...',
                               hintStyle: TextStyle(
                                 color: Color(0xFF9CA3AF),
                                 fontSize: 14,
@@ -250,7 +250,7 @@ class TerrainListScreen extends GetView<TerrainController> {
             ),
             const SizedBox(height: 20),
             Text(
-              hasAnyTerrain ? 'Aucun résultat' : 'Aucun terrain',
+              hasAnyTerrain ? 'Aucun résultat' : 'Aucune parcelle',
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
@@ -261,7 +261,7 @@ class TerrainListScreen extends GetView<TerrainController> {
             Text(
               hasAnyTerrain
                   ? 'Essayez une autre recherche\nou un autre filtre.'
-                  : 'Ajoutez votre premier terrain\npour commencer.',
+                  : 'Ajoutez votre première parcelle\npour commencer.',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 14,
@@ -274,7 +274,7 @@ class TerrainListScreen extends GetView<TerrainController> {
               ElevatedButton.icon(
                 onPressed: () => controller.goToForm(null),
                 icon: const Icon(PhosphorIconsLight.plus, size: 18),
-                label: const Text('Ajouter un terrain'),
+                label: const Text('Ajouter une parcelle'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF006F39),
                   foregroundColor: Colors.white,
@@ -575,7 +575,7 @@ class _TerrainCard extends StatelessWidget {
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
-                              _formatHourlyPrice(terrain.pricePerHour),
+                              _formatPriceRange(terrain),
                               style: const TextStyle(
                                 color: Color(0xFF006F39),
                                 fontSize: 12,
@@ -601,8 +601,12 @@ class _TerrainCard extends StatelessWidget {
                             runSpacing: 8,
                             children: [
                               _InfoBadge(
-                                label: terrain.displayCapacity,
-                                icon: PhosphorIconsLight.users,
+                                label: terrain.miniTerrainLabel,
+                                icon: PhosphorIconsLight.gridFour,
+                              ),
+                              _InfoBadge(
+                                label: terrain.parcelleStatusLabel,
+                                icon: PhosphorIconsLight.checkCircle,
                               ),
                               _InfoBadge(
                                 label: terrain.displaySurface,
@@ -622,6 +626,22 @@ class _TerrainCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 14),
+                    if (terrain.subTerrains.isNotEmpty) ...[
+                      SizedBox(
+                        height: 34,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: terrain.subTerrains.length,
+                          separatorBuilder: (context, index) =>
+                              const SizedBox(width: 8),
+                          itemBuilder: (context, index) {
+                            final miniTerrain = terrain.subTerrains[index];
+                            return _MiniTerrainChip(miniTerrain: miniTerrain);
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
                     Row(
                       children: [
                         GestureDetector(
@@ -656,12 +676,65 @@ class _TerrainCard extends StatelessWidget {
     );
   }
 
+  static String _formatPriceRange(TerrainModel terrain) {
+    final prices = [
+      terrain.pricePerHour,
+      ...terrain.subTerrains
+          .map((subTerrain) => subTerrain.pricePerHour)
+          .whereType<int>(),
+    ]..sort();
+    if (prices.first == prices.last) return _formatHourlyPrice(prices.first);
+    return '${_formatAmount(prices.first)} - ${_formatAmount(prices.last)} F/h';
+  }
+
   static String _formatHourlyPrice(int price) {
+    return '${_formatAmount(price)} F/h';
+  }
+
+  static String _formatAmount(int price) {
     final value = price.toString().replaceAllMapped(
       RegExp(r'\B(?=(\d{3})+(?!\d))'),
       (_) => ' ',
     );
-    return '$value F/h';
+    return value;
+  }
+}
+
+class _MiniTerrainChip extends StatelessWidget {
+  final SubTerrainModel miniTerrain;
+
+  const _MiniTerrainChip({required this.miniTerrain});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = miniTerrain.isActive
+        ? const Color(0xFF006F39)
+        : const Color(0xFF9CA3AF);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: miniTerrain.isActive
+            ? const Color(0xFFE8F5E9)
+            : const Color(0xFFF3F4F6),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.22)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(PhosphorIconsLight.soccerBall, color: color, size: 13),
+          const SizedBox(width: 5),
+          Text(
+            '${miniTerrain.name} · ${miniTerrain.type}',
+            style: TextStyle(
+              color: color,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
