@@ -37,8 +37,17 @@ class TimeSlot {
 class TerrainOption {
   final String id;
   final String name;
+  final String? subTerrainId;
+  final String? parentName;
 
-  const TerrainOption({required this.id, required this.name});
+  const TerrainOption({
+    required this.id,
+    required this.name,
+    this.subTerrainId,
+    this.parentName,
+  });
+
+  bool get isMiniTerrain => subTerrainId != null && subTerrainId!.isNotEmpty;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -75,16 +84,44 @@ class AvailabilityController extends GetxController {
     errorMessage.value = '';
     try {
       final data = await _service.getMesTerrains();
-      terrains.value = data
-          .map((e) {
-            final m = e as Map<String, dynamic>;
-            return TerrainOption(
-              id: m['id'] as String? ?? '',
-              name: m['name'] as String? ?? '',
+      final options = <TerrainOption>[];
+      for (final item in data) {
+        final m = item as Map<String, dynamic>;
+        final terrainId = m['id'] as String? ?? '';
+        final terrainName = m['name'] as String? ?? '';
+        if (terrainId.isEmpty) continue;
+
+        final subTerrains = (m['subTerrains'] as List<dynamic>? ?? [])
+            .whereType<Map<String, dynamic>>()
+            .where((subTerrain) => subTerrain['isActive'] != false)
+            .toList();
+
+        if (subTerrains.isEmpty) {
+          options.add(TerrainOption(id: terrainId, name: terrainName));
+        } else {
+          options.add(
+            TerrainOption(
+              id: terrainId,
+              name: '$terrainName · Toute la parcelle',
+              parentName: terrainName,
+            ),
+          );
+          for (final subTerrain in subTerrains) {
+            final subTerrainId = subTerrain['id'] as String? ?? '';
+            final subTerrainName = subTerrain['name'] as String? ?? '';
+            if (subTerrainId.isEmpty || subTerrainName.isEmpty) continue;
+            options.add(
+              TerrainOption(
+                id: terrainId,
+                name: subTerrainName,
+                subTerrainId: subTerrainId,
+                parentName: terrainName,
+              ),
             );
-          })
-          .where((t) => t.id.isNotEmpty)
-          .toList();
+          }
+        }
+      }
+      terrains.value = options;
       if (selectedTerrain.value >= terrains.length) {
         selectedTerrain.value = 0;
       }
@@ -134,8 +171,13 @@ class AvailabilityController extends GetxController {
     errorMessage.value = '';
     try {
       final terrainId = terrains[selectedTerrain.value].id;
+      final subTerrainId = terrains[selectedTerrain.value].subTerrainId;
       final dateStr = _formatDate(date);
-      final data = await _service.getCreneaux(terrainId, dateStr);
+      final data = await _service.getCreneaux(
+        terrainId,
+        dateStr,
+        subTerrainId: subTerrainId,
+      );
 
       slots.value = data.map((item) {
         final m = item as Map<String, dynamic>;
@@ -189,9 +231,19 @@ class AvailabilityController extends GetxController {
 
     try {
       if (isCurrentlyBlocked) {
-        await _service.debloquerCreneau(terrainId, dateStr, time);
+        await _service.debloquerCreneau(
+          terrainId,
+          dateStr,
+          time,
+          subTerrainId: terrains[selectedTerrain.value].subTerrainId,
+        );
       } else {
-        await _service.bloquerCreneau(terrainId, dateStr, time);
+        await _service.bloquerCreneau(
+          terrainId,
+          dateStr,
+          time,
+          subTerrainId: terrains[selectedTerrain.value].subTerrainId,
+        );
       }
       return true;
     } catch (_) {
@@ -275,12 +327,14 @@ class AvailabilityController extends GetxController {
             terrains[selectedTerrain.value].id,
             _formatDate(selectedDate.value),
             rangeTime,
+            subTerrainId: terrains[selectedTerrain.value].subTerrainId,
           );
         } else {
           await _service.bloquerCreneau(
             terrains[selectedTerrain.value].id,
             _formatDate(selectedDate.value),
             rangeTime,
+            subTerrainId: terrains[selectedTerrain.value].subTerrainId,
           );
         }
       }

@@ -99,11 +99,19 @@ class TerrainService {
   }
 
   // ── GET /terrains/:id/slots?date=YYYY-MM-DD ────────────────────────────────
-  Future<List<dynamic>> getCreneaux(String terrainId, String date) async {
-    final response = await http.get(
-      Uri.parse('$_base/terrains/$terrainId/slots?date=$date'),
-      headers: await _headers(),
+  Future<List<dynamic>> getCreneaux(
+    String terrainId,
+    String date, {
+    String? subTerrainId,
+  }) async {
+    final uri = Uri.parse('$_base/terrains/$terrainId/slots').replace(
+      queryParameters: {
+        'date': date,
+        if (subTerrainId != null && subTerrainId.isNotEmpty)
+          'subTerrainId': subTerrainId,
+      },
     );
+    final response = await http.get(uri, headers: await _headers());
     if (response.statusCode == 200) {
       return jsonDecode(response.body) as List<dynamic>;
     }
@@ -114,12 +122,18 @@ class TerrainService {
   Future<void> bloquerCreneau(
     String terrainId,
     String date,
-    String slot,
-  ) async {
+    String slot, {
+    String? subTerrainId,
+  }) async {
     final response = await http.post(
       Uri.parse('$_base/terrains/$terrainId/slots/block'),
       headers: await _headers(),
-      body: jsonEncode({'date': date, 'slot': slot}),
+      body: jsonEncode({
+        'date': date,
+        'slot': slot,
+        if (subTerrainId != null && subTerrainId.isNotEmpty)
+          'subTerrainId': subTerrainId,
+      }),
     );
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw Exception('Erreur blocage créneau: ${response.body}');
@@ -130,14 +144,20 @@ class TerrainService {
   Future<void> debloquerCreneau(
     String terrainId,
     String date,
-    String slot,
-  ) async {
+    String slot, {
+    String? subTerrainId,
+  }) async {
     final request = http.Request(
       'DELETE',
       Uri.parse('$_base/terrains/$terrainId/slots/block'),
     );
     request.headers.addAll(await _headers());
-    request.body = jsonEncode({'date': date, 'slot': slot});
+    request.body = jsonEncode({
+      'date': date,
+      'slot': slot,
+      if (subTerrainId != null && subTerrainId.isNotEmpty)
+        'subTerrainId': subTerrainId,
+    });
     final streamed = await request.send();
     if (streamed.statusCode != 200 && streamed.statusCode != 204) {
       throw Exception('Erreur déblocage créneau');
