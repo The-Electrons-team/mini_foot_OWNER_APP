@@ -7,6 +7,7 @@ import 'package:table_calendar/table_calendar.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../routes/app_routes.dart';
 import '../controllers/availability_controller.dart';
+import '../controllers/availability_range_helper.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Screen principal
@@ -516,13 +517,25 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
                     onTap: () => _onSlotTap(context, slot),
                     onLongPress: () async {
                       if (slot.isBooked) return;
+                      if (!controller.canToggleRange(slot.time, 2)) {
+                        Get.snackbar(
+                          'Plage indisponible',
+                          'Le blocage rapide agit sur 1h minimum.',
+                          snackPosition: SnackPosition.BOTTOM,
+                          backgroundColor: kBgCard,
+                          colorText: kTextPrim,
+                          margin: const EdgeInsets.all(16),
+                          borderRadius: 16,
+                        );
+                        return;
+                      }
                       HapticFeedback.heavyImpact();
                       final wasBlocked = slot.isBlocked;
-                      final ok = await controller.toggleBlock(slot.time);
+                      final ok = await controller.toggleBlockRange(slot.time, 2);
                       if (!ok) return;
                       Get.snackbar(
                         wasBlocked ? 'Débloqué' : 'Bloqué',
-                        '${slot.time} → ${slot.endTime}',
+                        '${slot.time} → ${rangeEndTime(slot.time, 2)} · 1h',
                         snackPosition: SnackPosition.BOTTOM,
                         backgroundColor: kBgCard,
                         colorText: kTextPrim,
@@ -1093,16 +1106,28 @@ class _AvailabilityEmptyState extends StatelessWidget {
 // Widget : Bottom sheet détail créneau
 // ══════════════════════════════════════════════════════════════════════════════
 
-class _SlotDetailSheet extends StatelessWidget {
+class _SlotDetailSheet extends StatefulWidget {
   final TimeSlot slot;
   final AvailabilityController controller;
 
   const _SlotDetailSheet({required this.slot, required this.controller});
 
   @override
+  State<_SlotDetailSheet> createState() => _SlotDetailSheetState();
+}
+
+class _SlotDetailSheetState extends State<_SlotDetailSheet> {
+  int selectedDurationSlots = AvailabilityController.durationOptions.first;
+
+  @override
   Widget build(BuildContext context) {
+    final slot = widget.slot;
+    final controller = widget.controller;
     final accentColor = controller.slotColor(slot.status);
     final bgColor = controller.slotBgColor(slot.status);
+    final actionEnabled =
+        !slot.isBooked &&
+        controller.canToggleRange(slot.time, selectedDurationSlots);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
@@ -1141,7 +1166,7 @@ class _SlotDetailSheet extends StatelessWidget {
 
           // Heure
           Text(
-            '${slot.time} → ${slot.endTime}',
+            '${slot.time} → ${rangeEndTime(slot.time, selectedDurationSlots)}',
             style: const TextStyle(
               fontSize: 22,
               fontWeight: FontWeight.w800,
@@ -1168,6 +1193,89 @@ class _SlotDetailSheet extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
+
+          if (!slot.isBooked) ...[
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Durée',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: kTextSub,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: AvailabilityController.durationOptions.map((slotCount) {
+                      final isSelected = selectedDurationSlots == slotCount;
+                      final isEnabled = controller.canToggleRange(slot.time, slotCount);
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: GestureDetector(
+                          onTap: !isEnabled
+                              ? null
+                              : () {
+                                  HapticFeedback.selectionClick();
+                                  setState(() => selectedDurationSlots = slotCount);
+                                },
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 180),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? kGreen
+                                  : isEnabled
+                                  ? kBgSurface
+                                  : kBg,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isSelected
+                                    ? kGreen
+                                    : isEnabled
+                                    ? kBorder
+                                    : kDivider,
+                              ),
+                            ),
+                            child: Text(
+                              formatSlotDuration(slotCount),
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: isSelected
+                                    ? Colors.white
+                                    : isEnabled
+                                    ? kTextPrim
+                                    : kTextLight,
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    actionEnabled
+                        ? 'Tu appliques l’action sur une plage continue de ${formatSlotDuration(selectedDurationSlots)}.'
+                        : 'Cette durée n’est pas disponible en continu depuis ${slot.time}.',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.35,
+                      color: kTextSub,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
 
           // Info équipe si réservé
           if (slot.isBooked) ...[
@@ -1280,12 +1388,19 @@ class _SlotDetailSheet extends StatelessWidget {
                           child: SizedBox(
                             height: 52,
                             child: ElevatedButton.icon(
-                              onPressed: () {
+                              onPressed: !actionEnabled
+                                  ? null
+                                  : () async {
                                 HapticFeedback.mediumImpact();
-                                controller.toggleBlock(slot.time);
+                                await controller.toggleBlockRange(
+                                  slot.time,
+                                  selectedDurationSlots,
+                                );
+                                if (!context.mounted) return;
                                 Navigator.of(context).pop();
                               },
                               style: ElevatedButton.styleFrom(
+                                disabledBackgroundColor: kDivider,
                                 backgroundColor: slot.isBlocked ? kGreen : kRed,
                                 foregroundColor: Colors.white,
                                 elevation: 0,
@@ -1300,7 +1415,9 @@ class _SlotDetailSheet extends StatelessWidget {
                                 size: 18,
                               ),
                               label: Text(
-                                slot.isBlocked ? 'Débloquer' : 'Bloquer',
+                                slot.isBlocked
+                                    ? 'Débloquer ${formatSlotDuration(selectedDurationSlots)}'
+                                    : 'Bloquer ${formatSlotDuration(selectedDurationSlots)}',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.w700,
                                 ),

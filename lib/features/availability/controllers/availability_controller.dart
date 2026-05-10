@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../../../core/services/terrain_service.dart';
+import 'availability_range_helper.dart';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Modèles
@@ -45,6 +46,8 @@ class TerrainOption {
 // ══════════════════════════════════════════════════════════════════════════════
 
 class AvailabilityController extends GetxController {
+  static const List<int> durationOptions = [2, 3];
+
   final _service = TerrainService();
 
   final focusedDay = DateTime.now().obs;
@@ -201,6 +204,97 @@ class AvailabilityController extends GetxController {
         Get.snackbar(
           'Erreur',
           'Impossible de modifier le créneau',
+          snackPosition: SnackPosition.TOP,
+        );
+      }
+      return false;
+    }
+  }
+
+  bool canToggleRange(String time, int slotCount) {
+    final idx = slots.indexWhere((slot) => slot.time == time);
+    if (idx == -1 || terrains.isEmpty) return false;
+
+    final startSlot = slots[idx];
+    if (startSlot.isBooked) return false;
+
+    final expectedTimes = buildTimeRange(time, slotCount);
+    final rangeSlots = <TimeSlot>[];
+
+    for (final expectedTime in expectedTimes) {
+      final slotIndex = slots.indexWhere((slot) => slot.time == expectedTime);
+      if (slotIndex == -1) return false;
+      rangeSlots.add(slots[slotIndex]);
+    }
+
+    if (startSlot.isBlocked) {
+      return rangeSlots.every((slot) => slot.isBlocked);
+    }
+
+    return rangeSlots.every((slot) => slot.isAvailable);
+  }
+
+  Future<bool> toggleBlockRange(
+    String time,
+    int slotCount, {
+    bool silent = false,
+  }) async {
+    if (!canToggleRange(time, slotCount)) {
+      if (!silent) {
+        Get.snackbar(
+          'Durée indisponible',
+          'Sélectionne une plage continue de ${formatSlotDuration(slotCount)}.',
+          snackPosition: SnackPosition.TOP,
+        );
+      }
+      return false;
+    }
+
+    final rangeTimes = buildTimeRange(time, slotCount);
+    final startIdx = slots.indexWhere((slot) => slot.time == time);
+    if (startIdx == -1) return false;
+
+    final shouldUnblock = slots[startIdx].isBlocked;
+    final originalStatuses = <String, SlotStatus>{
+      for (final rangeTime in rangeTimes)
+        rangeTime: slots.firstWhere((slot) => slot.time == rangeTime).status,
+    };
+
+    for (final rangeTime in rangeTimes) {
+      final idx = slots.indexWhere((slot) => slot.time == rangeTime);
+      slots[idx] = slots[idx].copyWith(
+        status: shouldUnblock ? SlotStatus.available : SlotStatus.blocked,
+      );
+    }
+    slots.refresh();
+
+    try {
+      for (final rangeTime in rangeTimes) {
+        if (shouldUnblock) {
+          await _service.debloquerCreneau(
+            terrains[selectedTerrain.value].id,
+            _formatDate(selectedDate.value),
+            rangeTime,
+          );
+        } else {
+          await _service.bloquerCreneau(
+            terrains[selectedTerrain.value].id,
+            _formatDate(selectedDate.value),
+            rangeTime,
+          );
+        }
+      }
+      return true;
+    } catch (_) {
+      for (final rangeTime in rangeTimes) {
+        final idx = slots.indexWhere((slot) => slot.time == rangeTime);
+        slots[idx] = slots[idx].copyWith(status: originalStatuses[rangeTime]);
+      }
+      slots.refresh();
+      if (!silent) {
+        Get.snackbar(
+          'Erreur',
+          'Impossible de modifier la plage sélectionnée',
           snackPosition: SnackPosition.TOP,
         );
       }
