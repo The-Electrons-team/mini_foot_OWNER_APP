@@ -1,7 +1,7 @@
 # PROGRESSION — Connexion Owner App ↔ Backend
 
 Fichier de suivi pour l'app propriétaires de terrains MiniFoot.
-L'UI est **entièrement construite**. L'authentification, la gestion des terrains, les réservations owner, le profil, le changement/réinitialisation de mot de passe, les disponibilités, le dashboard, les revenus/paiements et les rapports PDF sont maintenant connectés au backend NestJS ; les autres modules restent à brancher progressivement.
+L'UI est **entièrement construite**. L'authentification, la gestion des terrains, les réservations owner, le profil, le changement/réinitialisation de mot de passe, les disponibilités, le dashboard, les controllers, les revenus/paiements et les rapports PDF sont maintenant connectés au backend NestJS ; les autres modules restent à brancher progressivement.
 
 **Légende :**
 - ✅ CONNECTÉ — données réelles depuis le backend
@@ -15,8 +15,8 @@ L'UI est **entièrement construite**. L'authentification, la gestion des terrain
 
 | # | Bug | Fichiers concernés | Ticket ClickUp | État |
 |---|-----|--------------------|----------------|------|
-| 1 | **Service layer partiel** — auth + terrains connectés, autres modules encore mock | `core/services/` + controllers métier | [86c9gz7dn](https://app.clickup.com/t/86c9gz7dn) | 🔧 En cours |
-| 2 | **RolesGuard manquant** côté backend — endpoints owner sans vérification de rôle | `minifoot_backend/src/modules/auth/guards/` | [86c9gz7e1](https://app.clickup.com/t/86c9gz7e1) | ❌ À faire |
+| 1 | **Service layer partiel** — chat/tournois restent à brancher | `core/services/` + controllers métier | [86c9gz7dn](https://app.clickup.com/t/86c9gz7dn) | 🔧 En cours |
+| 2 | ~~RolesGuard manquant côté backend sur les routes owner~~ | `minifoot_backend/src/modules/auth/guards/` | [86c9gz7e1](https://app.clickup.com/t/86c9gz7e1) | ✅ Corrigé |
 | 3 | ~~`getProfile()` appelait `/auth/profile` au lieu de `/users/me`~~ | `core/services/auth_service.dart` | — | ✅ Corrigé 27/04 |
 
 **Ce qu'il faut créer pour avancer :**
@@ -38,7 +38,7 @@ L'UI est **entièrement construite**. L'authentification, la gestion des terrain
 | Déconnexion | ✅ CONNECTÉ | `profile/screens/profile_screen.dart` | (local — supprime token SharedPreferences) |
 
 **Note :** Bug corrigé le 27/04/2026 — `getProfile()` appelait `/auth/profile` (inexistant) au lieu de `/users/me`.
-Le backend n'a pas de système de rôles (pas d'enum `UserRole` dans Prisma), donc pas besoin de passer `role: OWNER`.
+Le backend utilise maintenant `UserRole` (`PLAYER`, `OWNER`, `CONTROLLER`) pour protéger les surfaces owner et controller.
 Le reset de mot de passe réutilise l'OTP Redis existant, valable 5 minutes.
 
 **Ticket ClickUp :** [86c9gz7gj](https://app.clickup.com/t/86c9gz7gj) (Module Owner — endpoints spécifiques propriétaire)
@@ -82,6 +82,7 @@ Le reset de mot de passe réutilise l'OTP Redis existant, valable 5 minutes.
 - Le bouton "Notre position" remplit le champ avec `Votre position` et envoie les coordonnées réelles.
 - La liste affiche le prix réel par heure, par exemple `10 000 F/h`.
 - L'écran disponibilités affiche les créneaux réels du jour, permet le blocage/déblocage individuel ou en lot, et respecte les créneaux déjà réservés.
+- L'UI disponibilités est pensée comme un planning simple : calendrier en semaine par défaut, résumé du jour dans le contenu et lignes de créneaux lisibles.
 
 **Ticket ClickUp :** [86c9gz7c1](https://app.clickup.com/t/86c9gz7c1) + [86c9gz7h7](https://app.clickup.com/t/86c9gz7h7)
 
@@ -174,7 +175,25 @@ Le reset de mot de passe réutilise l'OTP Redis existant, valable 5 minutes.
 
 ---
 
-## 9. TOURNOIS
+## 9. GESTION DES CONTROLLERS
+
+| Écran / Action | État | Fichiers Flutter | Endpoint Backend |
+|---|---|---|---|
+| Liste controllers | ✅ CONNECTÉ | `controllers/screens/controllers_screen.dart` + `core/services/controller_service.dart` | `GET /owner/controllers` |
+| Créer un controller | ✅ CONNECTÉ | `controllers/controllers_controller.dart` | `POST /owner/controllers` |
+| Activer / désactiver | ✅ CONNECTÉ | `controllers/controllers_controller.dart` | `PATCH /owner/controllers/:id` |
+| Assigner terrains | ✅ CONNECTÉ | `controllers/screens/controllers_screen.dart` | `PATCH /owner/controllers/:id` |
+| Voir détail + stats | ✅ CONNECTÉ | `controllers/screens/controller_detail_screen.dart` | `GET /owner/controllers/:id` |
+| Voir activité récente | ✅ CONNECTÉ | `controllers/screens/controller_detail_screen.dart` | `GET /owner/controllers/:id/activity` |
+
+**Notes :**
+- Le propriétaire crée le compte controller et peut partager les identifiants par SMS/WhatsApp.
+- Le controller peut scanner, consulter les réservations/créneaux sur hier, aujourd'hui et demain, et rendre un créneau indisponible.
+- Les actions sensibles du controller sont journalisées pour audit côté propriétaire.
+
+---
+
+## 10. TOURNOIS
 
 | Écran / Action | État | Fichiers Flutter | Endpoint Backend |
 |---|---|---|---|
@@ -189,7 +208,7 @@ Le reset de mot de passe réutilise l'OTP Redis existant, valable 5 minutes.
 
 ---
 
-## 10. CHAT TEMPS RÉEL
+## 11. CHAT TEMPS RÉEL
 
 | Écran / Action | État | Fichiers Flutter | Endpoint Backend |
 |---|---|---|---|
@@ -217,8 +236,9 @@ Le reset de mot de passe réutilise l'OTP Redis existant, valable 5 minutes.
 6. ✅ PROFIL          — affichage, édition prénom/nom, téléphone OTP, avatar, reversements et mot de passe
 7. 🔧 NOTIFICATIONS   — in-app connecté, push FCM à finaliser plus tard
 8. ✅ RAPPORTS PDF    — revenus + réservations avec aperçu, impression, partage et police PDF stable
-9. ⏳ TOURNOIS        — feature à créer from scratch
-10. ⏳ CHAT           — le plus complexe (WebSocket)
+9. ✅ CONTROLLERS     — gestion, scope, stats et activité auditée
+10. ⏳ TOURNOIS       — feature à créer from scratch
+11. ⏳ CHAT           — le plus complexe (WebSocket)
 ```
 
 ---
@@ -260,4 +280,4 @@ Le token se récupère via `SharedPreferences`, comme dans le flow auth actuel.
 
 ---
 
-*Dernière mise à jour : 5 mai 2026 — notifications in-app owner connectées, dashboard migré vers `GET /owner/dashboard`, auth, reset mot de passe, terrains, réservations owner, profil avancé, disponibilités, revenus, paiements et rapports PDF stabilisés*
+*Dernière mise à jour : 7 mai 2026 — controllers owner connectés, activité auditée, scope controller sécurisé, dashboard adapté aux rôles et écran disponibilités simplifié en planning*

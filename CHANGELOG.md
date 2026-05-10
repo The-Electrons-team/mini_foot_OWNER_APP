@@ -1,5 +1,17 @@
 # Changelog - MiniFoot Owner
 
+## [1.3.2] - 2026-05-07
+
+### Backend
+- **Gestion des controllers** : ajout des comptes `CONTROLLER` rattachés à un propriétaire avec terrains assignés, commission par check-in, activation/désactivation et statistiques du jour.
+- **Traçabilité controller** : scan QR, check-in et blocage/déblocage de créneaux sont journalisés dans `controller_activity_logs` pour que le propriétaire voie l'activité de chaque controller.
+- **Scope controller sécurisé** : un controller ne voit que ses terrains assignés et uniquement les réservations/créneaux d'hier, aujourd'hui et demain.
+
+### Owner App
+- **Ecran controllers** : liste, création, sélection des terrains, statut actif/inactif, partage des identifiants et page détail avec statistiques + activité récente.
+- **Dashboard adapté au rôle** : le propriétaire voit l'action Controllers, le controller voit ses actions utiles (réservations, créneaux, scanner).
+- **Disponibilités simplifiées** : calendrier ouvert en semaine par défaut, résumé du jour déplacé dans le contenu, créneaux affichés en planning vertical plus lisible.
+
 ## [1.3.1] - 2026-05-05
 
 ### Backend

@@ -29,10 +29,12 @@ MAPBOX_ACCESS_TOKEN=...
 | Photos terrain | Upload + affichage via proxy storage |
 | Localisation terrain | Mapbox + coordonnées `lat` / `lng` |
 | Réservations owner | Liste + détail + refus connectés |
+| Check-in QR | Scanner + confirmation de présence connecté |
 | Profil propriétaire | Profil épuré + photo, édition prénom/nom, téléphone OTP et mot de passe connectés |
 | Mot de passe oublié | OTP + réinitialisation depuis l'écran login |
-| Disponibilités | Créneaux réels + blocage/déblocage connectés |
+| Disponibilités | Planning de créneaux réels + blocage/déblocage connectés |
 | Dashboard | Stats, revenus, graphique et réservations récentes via endpoint dédié |
+| Controllers | Création, assignation terrains, activation, détail, stats et activité connectés |
 | Revenus / paiements | Transactions, reversements, totaux, filtres et graphiques connectés |
 | Notifications in-app | Liste réelle, compteur non lu, lecture individuelle et tout lire |
 | Rapports PDF | Revenus + réservations générés depuis les données réelles, avec aperçu/impression/partage |
@@ -59,6 +61,7 @@ L'écran disponibilités utilise les terrains du propriétaire connecté :
 - `DELETE /terrains/:id/slots/block`
 
 Les créneaux réservés ne peuvent pas être bloqués/débloqués depuis l'app owner. Les actions de blocage en lot attendent les réponses API et gardent l'interface synchronisée.
+L'UI s'ouvre en calendrier semaine par défaut, affiche un résumé clair du jour et présente les créneaux sous forme de planning vertical.
 
 ## Dashboard
 
@@ -72,6 +75,18 @@ Le badge notifications du dashboard utilise le compteur non lu renvoyé par `GET
 Le bouton ballon du dashboard ouvre maintenant un scanner QR de check-in. Le backend vérifie que la réservation appartient bien à un terrain du propriétaire, qu'elle est confirmée par paiement, puis enregistre la présence via un check-in séparé du `status` principal.
 
 La liste des réservations ouvre maintenant une page détail dédiée, plus lisible sur mobile, avec statut, client, paiement, terrain, référence et état de check-in.
+
+## Controllers
+
+Le module controllers utilise `lib/core/services/controller_service.dart` :
+
+- `GET /owner/controllers`
+- `POST /owner/controllers`
+- `GET /owner/controllers/:id`
+- `PATCH /owner/controllers/:id`
+- `GET /owner/controllers/:id/activity`
+
+Le propriétaire crée le compte controller, assigne les terrains, définit la commission par check-in et peut partager les identifiants. La page détail affiche statut, stats du jour, terrains assignés et activité récente. Côté backend, le controller est limité aux terrains assignés et aux réservations/créneaux d'hier, aujourd'hui et demain.
 
 ## Notifications
 
@@ -123,6 +138,7 @@ L'écran login affiche un lien `Mot de passe oublié ?` :
 
 ## Prochaine tâche
 
-Prochaine amélioration logique :
+Prochaines améliorations logiques :
 
-- Créer une vraie page détail réservation owner.
+- Enregistrer le token FCM côté backend après connexion.
+- Créer les modules tournois et chat owner connectés.

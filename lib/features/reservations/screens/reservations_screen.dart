@@ -58,6 +58,7 @@ class ReservationsScreen extends GetView<ReservationsController> {
         child: Column(
           children: [
             _buildFilterChips(),
+            _buildSummaryStrip(),
             Expanded(child: _buildReservationList()),
           ],
         ),
@@ -153,6 +154,96 @@ class ReservationsScreen extends GetView<ReservationsController> {
     });
   }
 
+  Widget _buildSummaryStrip() {
+    return Obx(() {
+      final list = controller.filteredReservations;
+      final totalAmount = list.fold<int>(0, (sum, item) => sum + item.amount);
+      final checkedInCount = list.where((item) => item.isCheckedIn).length;
+      final pendingActionCount = list
+          .where((item) => item.status == 'pending')
+          .length;
+
+      return Container(
+        width: double.infinity,
+        color: kBgCard,
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                kGreen.withValues(alpha: 0.08),
+                kBlue.withValues(alpha: 0.05),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: kBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Vue rapide',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: kTextPrim,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${list.length} réservation${list.length > 1 ? 's' : ''} dans cette vue',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: kTextSub,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: _SummaryMetric(
+                      icon: PhosphorIcons.wallet(PhosphorIconsStyle.duotone),
+                      label: 'Montant',
+                      value: _formatAmount(totalAmount),
+                      accent: kGreen,
+                      background: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _SummaryMetric(
+                      icon: PhosphorIcons.sealCheck(PhosphorIconsStyle.duotone),
+                      label: 'Présences',
+                      value: '$checkedInCount',
+                      accent: kBlue,
+                      background: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _SummaryMetric(
+                      icon: PhosphorIcons.hourglassMedium(
+                        PhosphorIconsStyle.duotone,
+                      ),
+                      label: 'À traiter',
+                      value: '$pendingActionCount',
+                      accent: kGold,
+                      background: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    });
+  }
+
   // ── Reservation list ────────────────────────────────────────────────────────
   Widget _buildReservationList() {
     return Obx(() {
@@ -187,8 +278,10 @@ class ReservationsScreen extends GetView<ReservationsController> {
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
-                'Les reservations apparaitront ici',
+              Text(
+                controller.selectedFilter.value == 'all'
+                    ? 'Les réservations apparaitront ici'
+                    : 'Aucune réservation pour ce filtre',
                 style: TextStyle(fontSize: 13, color: kTextLight),
               ),
             ],
@@ -224,6 +317,16 @@ class ReservationsScreen extends GetView<ReservationsController> {
 }
 
 // ── Reservation card ────────────────────────────────────────────────────────
+
+String _formatAmount(int amount) {
+  final str = amount.toString();
+  final buffer = StringBuffer();
+  for (int i = 0; i < str.length; i++) {
+    if (i > 0 && (str.length - i) % 3 == 0) buffer.write(' ');
+    buffer.write(str[i]);
+  }
+  return '${buffer.toString()} F CFA';
+}
 
 class _ReservationCard extends StatelessWidget {
   final ReservationModel reservation;
@@ -282,14 +385,11 @@ class _ReservationCard extends StatelessWidget {
         : parts.first[0].toUpperCase();
   }
 
-  String _formatAmount(int amount) {
-    final str = amount.toString();
-    final buffer = StringBuffer();
-    for (int i = 0; i < str.length; i++) {
-      if (i > 0 && (str.length - i) % 3 == 0) buffer.write(' ');
-      buffer.write(str[i]);
+  String get _terrainLabel {
+    if (reservation.subTerrainName.isEmpty) {
+      return reservation.terrain;
     }
-    return '${buffer.toString()} F CFA';
+    return '${reservation.terrain} • ${reservation.subTerrainName}';
   }
 
   @override
@@ -307,10 +407,13 @@ class _ReservationCard extends StatelessWidget {
               color: kBgCard,
               borderRadius: BorderRadius.circular(16),
               boxShadow: kCardShadow,
+              border: Border.all(color: kBorder.withValues(alpha: 0.7)),
             ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
                       width: 44,
@@ -344,33 +447,68 @@ class _ReservationCard extends StatelessWidget {
                             ),
                           ),
                           const SizedBox(height: 2),
-                          Text(
-                            reservation.teamName,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              color: kTextSub,
-                            ),
+                          Row(
+                            children: [
+                              Icon(
+                                PhosphorIcons.phone(PhosphorIconsStyle.duotone),
+                                size: 12,
+                                color: kTextLight,
+                              ),
+                              const SizedBox(width: 4),
+                              Expanded(
+                                child: Text(
+                                  reservation.phone.isEmpty
+                                      ? reservation.teamName
+                                      : reservation.phone,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: kTextSub,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
                         ],
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _statusBg,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        _statusLabel,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: _statusColor,
+                    const SizedBox(width: 10),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _statusBg,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            _statusLabel,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: _statusColor,
+                            ),
+                          ),
                         ),
-                      ),
+                        const SizedBox(height: 8),
+                        Container(
+                          width: 34,
+                          height: 34,
+                          decoration: BoxDecoration(
+                            color: kBgSurface,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(
+                            PhosphorIcons.caretRight(PhosphorIconsStyle.bold),
+                            size: 14,
+                            color: kTextSub,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -379,74 +517,59 @@ class _ReservationCard extends StatelessWidget {
                 const SizedBox(height: 14),
                 Row(
                   children: [
+                    Container(
+                      width: 32,
+                      height: 32,
+                      decoration: BoxDecoration(
+                        color: kBlueLight,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Icon(
+                        PhosphorIcons.courtBasketball(
+                          PhosphorIconsStyle.duotone,
+                        ),
+                        color: kBlue,
+                        size: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
                     Expanded(
-                      child: Row(
+                      child: Text(
+                        _terrainLabel,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: kTextSub,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Wrap(
+                        spacing: 12,
+                        runSpacing: 8,
                         children: [
-                          Container(
-                            width: 32,
-                            height: 32,
-                            decoration: BoxDecoration(
-                              color: kBlueLight,
-                              borderRadius: BorderRadius.circular(8),
+                          _MetaText(
+                            icon: PhosphorIcons.calendarBlank(
+                              PhosphorIconsStyle.duotone,
                             ),
-                            child: Icon(
-                              PhosphorIcons.courtBasketball(
-                                PhosphorIconsStyle.duotone,
-                              ),
-                              color: kBlue,
-                              size: 16,
-                            ),
+                            label: reservation.date,
                           ),
-                          const SizedBox(width: 8),
-                          Flexible(
-                            child: Text(
-                              reservation.terrain,
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: kTextSub,
-                              ),
-                              overflow: TextOverflow.ellipsis,
+                          _MetaText(
+                            icon: PhosphorIcons.clock(
+                              PhosphorIconsStyle.duotone,
                             ),
+                            label: reservation.timeSlot,
                           ),
                         ],
                       ),
                     ),
-                    Row(
-                      children: [
-                        Icon(
-                          PhosphorIcons.clock(PhosphorIconsStyle.duotone),
-                          color: kTextLight,
-                          size: 14,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          reservation.timeSlot,
-                          style: const TextStyle(fontSize: 12, color: kTextSub),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          PhosphorIcons.calendarBlank(
-                            PhosphorIconsStyle.duotone,
-                          ),
-                          color: kTextLight,
-                          size: 14,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          reservation.date,
-                          style: const TextStyle(fontSize: 12, color: kTextSub),
-                        ),
-                      ],
-                    ),
-                    const Spacer(),
+                    const SizedBox(width: 8),
                     Text(
                       _formatAmount(reservation.amount),
                       style: const TextStyle(
@@ -457,11 +580,198 @@ class _ReservationCard extends StatelessWidget {
                     ),
                   ],
                 ),
+                const SizedBox(height: 12),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    color: kBgSurface,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _InlineState(
+                          icon: PhosphorIcons.creditCard(
+                            PhosphorIconsStyle.duotone,
+                          ),
+                          label: reservation.paymentStatus,
+                          value: reservation.paymentMethod,
+                        ),
+                      ),
+                      Container(width: 1, height: 24, color: kBorder),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _InlineState(
+                          icon: reservation.isCheckedIn
+                              ? PhosphorIcons.sealCheck(
+                                  PhosphorIconsStyle.duotone,
+                                )
+                              : PhosphorIcons.mapPinLine(
+                                  PhosphorIconsStyle.duotone,
+                                ),
+                          label: reservation.isCheckedIn
+                              ? 'Présence confirmée'
+                              : 'Check-in en attente',
+                          value: reservation.isCheckedIn
+                              ? 'Joueur arrivé'
+                              : 'En attente',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _SummaryMetric extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color accent;
+  final Color background;
+
+  const _SummaryMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.accent,
+    required this.background,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: accent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(9),
+            ),
+            child: Icon(icon, size: 16, color: accent),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            label,
+            style: const TextStyle(
+              fontSize: 11,
+              color: kTextSub,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              color: kTextPrim,
+              fontWeight: FontWeight.w800,
+            ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InlineState extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+
+  const _InlineState({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: kBgCard,
+            borderRadius: BorderRadius.circular(9),
+          ),
+          child: Icon(icon, size: 15, color: kTextSub),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: kTextPrim,
+                  fontWeight: FontWeight.w700,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: kTextSub,
+                  fontWeight: FontWeight.w500,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MetaText extends StatelessWidget {
+  final IconData icon;
+  final String label;
+
+  const _MetaText({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, color: kTextLight, size: 14),
+        const SizedBox(width: 5),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: kTextSub,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 }

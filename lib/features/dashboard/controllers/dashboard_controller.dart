@@ -1,9 +1,11 @@
 import 'package:get/get.dart';
+import '../../auth/controllers/auth_controller.dart';
 import '../../../core/services/dashboard_service.dart';
 import '../../../routes/app_routes.dart';
 
 class DashboardController extends GetxController {
   final _service = DashboardService();
+  final _auth = Get.find<AuthController>();
 
   final selectedTab = 0.obs;
 
@@ -68,6 +70,8 @@ class DashboardController extends GetxController {
     return '$first$second'.toUpperCase();
   }
 
+  bool get isController => _auth.user.value?.isController == true;
+
   Future<void> loadDashboard() async {
     isLoading.value = true;
     errorMessage.value = '';
@@ -113,4 +117,5 @@ class DashboardController extends GetxController {
   void goToProfile() => Get.toNamed(Routes.profile);
   void goToNotifications() => Get.toNamed(Routes.notifications);
   void goToQrCheckIn() => Get.toNamed(Routes.qrCheckIn);
+  void goToControllers() => Get.toNamed(Routes.controllers);
 }

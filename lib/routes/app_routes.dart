@@ -30,6 +30,9 @@ import '../features/chat/bindings/chat_binding.dart';
 import '../features/chat/screens/chat_list_screen.dart';
 import '../features/qr_checkin/bindings/qr_checkin_binding.dart';
 import '../features/qr_checkin/screens/qr_checkin_screen.dart';
+import '../features/controllers/bindings/controllers_binding.dart';
+import '../features/controllers/screens/controller_detail_screen.dart';
+import '../features/controllers/screens/controllers_screen.dart';
 
 abstract class Routes {
   static const splash = '/';
@@ -52,6 +55,8 @@ abstract class Routes {
   static const revenues = '/revenues';
   static const chat = '/chat';
   static const qrCheckIn = '/qr-check-in';
+  static const controllers = '/controllers';
+  static const controllerDetail = '/controllers/detail';
 }
 
 final appPages = [
@@ -197,6 +202,20 @@ final appPages = [
     name: Routes.qrCheckIn,
     page: () => const QrCheckInScreen(),
     binding: QrCheckInBinding(),
+    transition: Transition.cupertino,
+    transitionDuration: const Duration(milliseconds: 300),
+  ),
+  GetPage(
+    name: Routes.controllers,
+    page: () => const ControllersScreen(),
+    binding: ControllersBinding(),
+    transition: Transition.cupertino,
+    transitionDuration: const Duration(milliseconds: 300),
+  ),
+  GetPage(
+    name: Routes.controllerDetail,
+    page: () => const ControllerDetailScreen(),
+    binding: ControllersBinding(),
     transition: Transition.cupertino,
     transitionDuration: const Duration(milliseconds: 300),
   ),
