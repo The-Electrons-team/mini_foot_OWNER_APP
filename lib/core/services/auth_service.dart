@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -15,11 +16,22 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> login(String phone, String password) async {
-    final response = await http.post(
-      Uri.parse('$_baseUrl/auth/login'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone': phone, 'password': password}),
-    );
+    late final http.Response response;
+    try {
+      response = await http
+          .post(
+            Uri.parse('$_baseUrl/auth/login'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'phone': phone, 'password': password}),
+          )
+          .timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      throw Exception('SERVER_UNAVAILABLE');
+    } on SocketException {
+      throw Exception('SERVER_UNAVAILABLE');
+    } on http.ClientException {
+      throw Exception('SERVER_UNAVAILABLE');
+    }
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       return jsonDecode(response.body);
@@ -32,15 +44,42 @@ class AuthService {
     }
   }
 
-  Future<Map<String, dynamic>> startSignup(String phone) async {
-    final response = await http.post(
-      Uri.parse('$_baseUrl/auth/signup'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone': phone}),
-    );
+  Future<Map<String, dynamic>> startSignup({
+    required String phone,
+    required String firstName,
+    required String lastName,
+    required String password,
+    String? birthDate,
+  }) async {
+    final body = <String, dynamic>{
+      'phone': phone,
+      'firstName': firstName,
+      'lastName': lastName,
+      'password': password,
+      if (birthDate != null) 'birthDate': birthDate,
+    };
+    late final http.Response response;
+    try {
+      response = await http
+          .post(
+            Uri.parse('$_baseUrl/auth/signup-owner'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode(body),
+          )
+          .timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      throw Exception('SERVER_UNAVAILABLE');
+    } on SocketException {
+      throw Exception('SERVER_UNAVAILABLE');
+    } on http.ClientException {
+      throw Exception('SERVER_UNAVAILABLE');
+    }
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       return jsonDecode(response.body);
+    } else if (response.statusCode == 400) {
+      final decoded = jsonDecode(response.body) as Map<String, dynamic>;
+      throw Exception(decoded['message'] ?? 'Erreur d\'inscription');
     } else {
       throw Exception('Erreur d\'inscription: ${response.body}');
     }
@@ -57,34 +96,6 @@ class AuthService {
       return jsonDecode(response.body);
     } else {
       throw Exception('Code invalide: ${response.body}');
-    }
-  }
-
-  Future<Map<String, dynamic>> register({
-    required String phone,
-    required String password,
-    required String firstName,
-    required String lastName,
-    String? birthDate,
-  }) async {
-    final response = await http.post(
-      Uri.parse('$_baseUrl/auth/register-owner'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode(
-        {
-          'phone': phone,
-          'password': password,
-          'firstName': firstName,
-          'lastName': lastName,
-          'birthDate': birthDate,
-        }..removeWhere((key, value) => value == null),
-      ),
-    );
-
-    if (response.statusCode == 200 || response.statusCode == 201) {
-      return jsonDecode(response.body);
-    } else {
-      throw Exception('Erreur lors de l\'enregistrement: ${response.body}');
     }
   }
 

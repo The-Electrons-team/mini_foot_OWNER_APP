@@ -80,17 +80,16 @@ class RegisterScreen extends GetView<AuthController> {
         return;
       }
 
-      await controller.startSignup(phone);
-      
+      await controller.startSignup(
+        phone: phone,
+        firstName: prenomCtrl.text.trim(),
+        lastName: nomCtrl.text.trim(),
+        password: passCtrl.text.trim(),
+        birthDate: birthDate.value?.toIso8601String(),
+      );
+
       Get.to(
-        () => OtpScreen(
-          phone: phone,
-          firstName: prenomCtrl.text.trim(),
-          lastName: nomCtrl.text.trim(),
-          password: passCtrl.text.trim(),
-          birthDate: birthDate.value,
-          isNewUser: true,
-        ),
+        () => OtpScreen(phone: phone, isNewUser: true),
         transition: Transition.rightToLeftWithFade,
         duration: const Duration(milliseconds: 350),
       );

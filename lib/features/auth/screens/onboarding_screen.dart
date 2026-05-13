@@ -19,8 +19,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final List<_OnboardingData> _pages = const [
     // Slide 1 — même photo terrain que minifoot_mobile slide 1
     _OnboardingData(
-      imageUrl:
-          'https://images.pexels.com/photos/12486370/pexels-photo-12486370.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+      imageUrl: 'assets/images/terrain.jpeg',
       fallbackAsset: 'assets/images/terrain.webp',
       title: 'Gérez vos\nterrains',
       subtitle:
@@ -28,8 +27,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ),
     // Slide 2 — photo joueurs / match (minifoot_mobile slide 2)
     _OnboardingData(
-      imageUrl:
-          'https://images.pexels.com/photos/1884574/pexels-photo-1884574.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+      imageUrl: 'assets/images/equipe.jpg',
       fallbackAsset: 'assets/images/ballon.png',
       title: 'Suivez vos\nrevenus',
       subtitle:
@@ -37,8 +35,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     ),
     // Slide 3 — même photo match que minifoot_mobile slide 3
     _OnboardingData(
-      imageUrl:
-          'https://images.pexels.com/photos/3148452/pexels-photo-3148452.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+      imageUrl: 'assets/images/match.jpg',
       fallbackAsset: 'assets/images/minifoot.png',
       title: 'Organisez des\ntournois',
       subtitle:
@@ -95,26 +92,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               opacity: opacity,
               child: Transform.translate(
                 offset: Offset(parallax, 0),
-                child: Image.network(
+                child: Image.asset(
                   _pages[i].imageUrl,
                   fit: BoxFit.cover,
                   width: double.infinity,
                   height: double.infinity,
-                  errorBuilder: (_, _, _) => Image.asset(
-                    _pages[i].fallbackAsset,
-                    fit: BoxFit.cover,
-                    width: double.infinity,
-                    height: double.infinity,
-                  ),
-                  loadingBuilder: (_, child, progress) {
-                    if (progress == null) return child;
-                    return Container(
-                      color: const Color(0xFF0A2E1A),
-                      child: const Center(
-                        child: CircularProgressIndicator(color: kGreen),
-                      ),
-                    );
-                  },
                 ),
               ),
             );

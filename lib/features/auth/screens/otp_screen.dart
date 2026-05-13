@@ -93,17 +93,7 @@ class _OtpScreenState extends State<OtpScreen> {
     }
 
     if (widget.isNewUser) {
-      await _authController.verifyAndRegister(
-        phone: widget.phone,
-        code: code,
-        firstName: widget.firstName!,
-        lastName: widget.lastName!,
-        password: widget.password!,
-        birthDate: widget.birthDate,
-      );
-    } else {
-      // Pour une future connexion OTP (non implémentée ici car Login est direct si compte existe)
-      // Mais on garde la structure
+      await _authController.verifyOtp(phone: widget.phone, code: code);
     }
   }
 

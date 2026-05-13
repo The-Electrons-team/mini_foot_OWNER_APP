@@ -24,22 +24,28 @@ class TerrainFormScreen extends StatefulWidget {
 }
 
 class _SubTerrainDraft {
-  final String? id;
+  final String? divisionGroup;
   final TextEditingController nameCtrl;
   final TextEditingController capacityCtrl;
   final TextEditingController priceCtrl;
   final RxString type;
   final RxString surface;
   final RxBool isActive;
+  final RxBool allowFull;
+  final RxBool allowHalf;
+  final RxBool allowThird;
 
   _SubTerrainDraft({
-    this.id,
+    this.divisionGroup,
     required String name,
     int capacity = 10,
     String type = '5v5',
     String surface = 'Gazon synthétique',
     int? pricePerHour,
     bool isActive = true,
+    bool allowFull = true,
+    bool allowHalf = false,
+    bool allowThird = false,
   }) : nameCtrl = TextEditingController(text: name),
        capacityCtrl = TextEditingController(text: '$capacity'),
        priceCtrl = TextEditingController(
@@ -47,36 +53,83 @@ class _SubTerrainDraft {
        ),
        type = type.obs,
        surface = surface.obs,
-       isActive = isActive.obs;
+       isActive = isActive.obs,
+       allowFull = allowFull.obs,
+       allowHalf = allowHalf.obs,
+       allowThird = allowThird.obs;
 
-  factory _SubTerrainDraft.fromModel(SubTerrainModel model) {
+  factory _SubTerrainDraft.fromModels(List<SubTerrainModel> models) {
+    final first = models.first;
+    final physicalName = first.physicalName ?? _stripDivisionLabel(first.name);
+    SubTerrainModel? full;
+    for (final model in models) {
+      if (model.divisionType == 'FULL') {
+        full = model;
+        break;
+      }
+    }
+    final half = models.any((m) => m.divisionType == 'HALF');
+    final third = models.any((m) => m.divisionType == 'THIRD');
     return _SubTerrainDraft(
-      id: model.id,
-      name: model.name,
-      capacity: model.capacity,
-      type: model.type,
-      surface: model.surface ?? 'Gazon synthétique',
-      pricePerHour: model.pricePerHour,
-      isActive: model.isActive,
+      divisionGroup: first.divisionGroup ?? first.id,
+      name: physicalName,
+      capacity: first.capacity,
+      type: first.type,
+      surface: first.surface ?? 'Gazon synthétique',
+      pricePerHour: full?.pricePerHour ?? first.pricePerHour,
+      isActive: models.any((m) => m.isActive),
+      allowFull: full != null || (!half && !third),
+      allowHalf: half,
+      allowThird: third,
     );
   }
 
-  SubTerrainModel? toModel() {
+  List<SubTerrainModel>? toModels(int index) {
     final name = nameCtrl.text.trim();
     final capacity = int.tryParse(capacityCtrl.text.trim());
     final priceText = priceCtrl.text.trim();
     final customPrice = priceText.isEmpty ? null : int.tryParse(priceText);
     if (name.isEmpty || capacity == null || capacity <= 0) return null;
+    if (!allowFull.value && !allowHalf.value && !allowThird.value) return null;
+    final group =
+        divisionGroup ?? 'terrain_${index + 1}_${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_')}';
 
-    return SubTerrainModel(
-      id: id,
-      name: name,
-      capacity: capacity,
-      type: type.value,
-      surface: surface.value,
-      pricePerHour: customPrice,
-      isActive: isActive.value,
-    );
+    SubTerrainModel unit(
+      String label,
+      String divisionType,
+      int divisionIndex,
+      int? price,
+    ) {
+      return SubTerrainModel(
+        name: '$name - $label',
+        physicalName: name,
+        divisionGroup: group,
+        divisionType: divisionType,
+        divisionIndex: divisionIndex,
+        capacity: capacity,
+        type: type.value,
+        surface: surface.value,
+        pricePerHour: price,
+        isActive: isActive.value,
+      );
+    }
+
+    final units = <SubTerrainModel>[];
+    if (allowFull.value) units.add(unit('Entier', 'FULL', 0, customPrice));
+    if (allowHalf.value) {
+      final price = customPrice == null ? null : (customPrice / 2).ceil();
+      units
+        ..add(unit('Demi 1', 'HALF', 1, price))
+        ..add(unit('Demi 2', 'HALF', 2, price));
+    }
+    if (allowThird.value) {
+      final price = customPrice == null ? null : (customPrice / 3).ceil();
+      units
+        ..add(unit('Tiers 1', 'THIRD', 1, price))
+        ..add(unit('Tiers 2', 'THIRD', 2, price))
+        ..add(unit('Tiers 3', 'THIRD', 3, price));
+    }
+    return units;
   }
 
   void dispose() {
@@ -84,6 +137,12 @@ class _SubTerrainDraft {
     capacityCtrl.dispose();
     priceCtrl.dispose();
   }
+}
+
+String _stripDivisionLabel(String value) {
+  return value
+      .replaceAll(RegExp(r'\s*-\s*(Entier|Demi\s+\d+|Tiers\s+\d+)$'), '')
+      .trim();
 }
 
 class _TerrainFormScreenState extends State<TerrainFormScreen> {
@@ -166,8 +225,18 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
         _mapCenter.value = LatLng(t.lat!, t.lng!);
       }
 
-      _miniTerrains.value = t.subTerrains
-          .map(_SubTerrainDraft.fromModel)
+      final grouped = <String, List<SubTerrainModel>>{};
+      for (final subTerrain in t.subTerrains) {
+        final key =
+            subTerrain.divisionGroup ??
+            subTerrain.physicalName ??
+            subTerrain.id ??
+            subTerrain.name;
+        grouped.putIfAbsent(key, () => []).add(subTerrain);
+      }
+      _miniTerrains.value = grouped.values
+          .where((group) => group.isNotEmpty)
+          .map(_SubTerrainDraft.fromModels)
           .toList();
     }
 
@@ -707,7 +776,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
   );
 
   Widget _buildMiniTerrainsSection() => _Card(
-    title: 'Mini-terrains',
+    title: 'Terrains du complexe',
     icon: PhosphorIconsLight.soccerBall,
     trailing: _IconPillButton(
       icon: PhosphorIconsLight.plus,
@@ -760,7 +829,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Mini-terrain ${index + 1}',
+                  'Terrain ${index + 1}',
                   style: const TextStyle(
                     color: Color(0xFF1A1A1A),
                     fontSize: 13,
@@ -788,7 +857,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
           ),
           const SizedBox(height: 12),
           _Field(
-            label: 'Nom *',
+            label: 'Nom du terrain *',
             ctrl: miniTerrain.nameCtrl,
             hint: 'Ex: Terrain A',
             icon: PhosphorIconsLight.pen,
@@ -842,12 +911,48 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
                 child: _Field(
                   label: 'Prix perso',
                   ctrl: miniTerrain.priceCtrl,
-                  hint: 'Optionnel',
+                  hint: 'Prix entier',
                   icon: PhosphorIconsLight.currencyDollar,
                   keyboardType: TextInputType.number,
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          const Text(
+            'Options réservables',
+            style: TextStyle(
+              color: Color(0xFF6B7280),
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Obx(
+            () => Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _DivisionChip(
+                  label: 'Entier',
+                  selected: miniTerrain.allowFull.value,
+                  onTap: () =>
+                      miniTerrain.allowFull.value = !miniTerrain.allowFull.value,
+                ),
+                _DivisionChip(
+                  label: 'Demi',
+                  selected: miniTerrain.allowHalf.value,
+                  onTap: () =>
+                      miniTerrain.allowHalf.value = !miniTerrain.allowHalf.value,
+                ),
+                _DivisionChip(
+                  label: 'Tiers',
+                  selected: miniTerrain.allowThird.value,
+                  onTap: () =>
+                      miniTerrain.allowThird.value = !miniTerrain.allowThird.value,
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1308,7 +1413,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     if (name.isEmpty) {
       Get.snackbar(
         'Champ requis',
-        'Veuillez saisir un nom de parcelle',
+        'Veuillez saisir un nom de complexe',
         snackPosition: SnackPosition.TOP,
       );
       return;
@@ -1324,14 +1429,20 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
       return;
     }
 
-    final subTerrains = _miniTerrains
-        .map((miniTerrain) => miniTerrain.toModel())
-        .whereType<SubTerrainModel>()
-        .toList();
-    if (subTerrains.length != _miniTerrains.length) {
+    final subTerrainGroups = <List<SubTerrainModel>>[];
+    for (var i = 0; i < _miniTerrains.length; i++) {
+      final models = _miniTerrains[i].toModels(i);
+      if (models == null) {
+        subTerrainGroups.clear();
+        break;
+      }
+      subTerrainGroups.add(models);
+    }
+    final subTerrains = subTerrainGroups.expand((models) => models).toList();
+    if (subTerrains.isEmpty || subTerrainGroups.length != _miniTerrains.length) {
       Get.snackbar(
-        'Mini-terrain incomplet',
-        'Chaque mini-terrain doit avoir un nom et une capacité valide',
+        'Terrain incomplet',
+        'Chaque terrain doit avoir un nom, une capacité valide et au moins une option réservable',
         snackPosition: SnackPosition.TOP,
       );
       return;
@@ -1378,7 +1489,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
           message: _isEditing ? 'Terrain modifié !' : 'Terrain créé !',
           subtitle: _isEditing
               ? 'Les modifications ont été enregistrées'
-              : 'Votre parcelle et ses mini-terrains sont prêts',
+              : 'Votre complexe et ses terrains sont prêts',
         ),
         barrierDismissible: false,
       );
@@ -1732,6 +1843,46 @@ class _Field extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _DivisionChip extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _DivisionChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: 180.ms,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFF006F39) : Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: selected
+                ? const Color(0xFF006F39)
+                : const Color(0xFFE5E0D8),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: selected ? Colors.white : const Color(0xFF6B7280),
+            fontSize: 12,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ),
     );
   }
 }

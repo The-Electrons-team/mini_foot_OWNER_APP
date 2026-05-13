@@ -51,23 +51,9 @@ class LoginScreen extends GetView<AuthController> {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            Image.network(
-              'https://images.pexels.com/photos/12486370/pexels-photo-12486370.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=2',
+            Image.asset(
+              'assets/images/terrain.jpeg',
               fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) => Container(
-                color: const Color(0xFF0A2E1A),
-                child: const Center(
-                  child: Icon(
-                    Icons.sports_soccer,
-                    color: Colors.white38,
-                    size: 64,
-                  ),
-                ),
-              ),
-              loadingBuilder: (_, child, progress) {
-                if (progress == null) return child;
-                return Container(color: const Color(0xFF0A2E1A));
-              },
             ),
             Container(
               decoration: BoxDecoration(

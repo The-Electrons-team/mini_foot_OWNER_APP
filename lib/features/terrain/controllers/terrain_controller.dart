@@ -6,6 +6,10 @@ import '../../../routes/app_routes.dart';
 class SubTerrainModel {
   final String? id;
   final String name;
+  final String? physicalName;
+  final String? divisionGroup;
+  final String divisionType;
+  final int divisionIndex;
   final int capacity;
   final String type;
   final String? surface;
@@ -15,6 +19,10 @@ class SubTerrainModel {
   const SubTerrainModel({
     this.id,
     required this.name,
+    this.physicalName,
+    this.divisionGroup,
+    this.divisionType = 'FULL',
+    this.divisionIndex = 0,
     required this.capacity,
     required this.type,
     this.surface,
@@ -26,6 +34,10 @@ class SubTerrainModel {
     return SubTerrainModel(
       id: json['id'],
       name: json['name'] ?? '',
+      physicalName: json['physicalName'],
+      divisionGroup: json['divisionGroup'],
+      divisionType: json['divisionType'] ?? 'FULL',
+      divisionIndex: (json['divisionIndex'] ?? 0) as int,
       capacity: (json['capacity'] ?? 10) as int,
       type: json['type'] ?? '5v5',
       surface: json['surface'],
@@ -37,6 +49,12 @@ class SubTerrainModel {
   Map<String, dynamic> toJson() => {
     if (id != null && id!.isNotEmpty) 'id': id,
     'name': name,
+    if (physicalName != null && physicalName!.isNotEmpty)
+      'physicalName': physicalName,
+    if (divisionGroup != null && divisionGroup!.isNotEmpty)
+      'divisionGroup': divisionGroup,
+    'divisionType': divisionType,
+    'divisionIndex': divisionIndex,
     'capacity': capacity,
     'type': type,
     if (surface != null && surface!.isNotEmpty) 'surface': surface,

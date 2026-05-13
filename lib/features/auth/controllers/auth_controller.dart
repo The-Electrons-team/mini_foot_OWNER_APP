@@ -72,19 +72,34 @@ class AuthController extends GetxController {
       } else if (e.toString().contains('ID_INVALIDES')) {
         message = 'Mot de passe incorrect.';
       } else if (e.toString().contains('ROLE_NON_AUTORISE')) {
-        message = 'Ce compte est un compte joueur. Utilisez un compte propriétaire ou contrôleur.';
+        message =
+            'Ce compte est un compte joueur. Utilisez un compte propriétaire ou contrôleur.';
+      } else if (e.toString().contains('SERVER_UNAVAILABLE')) {
+        message =
+            'Serveur indisponible. Vérifiez votre connexion internet puis réessayez.';
       }
       Get.snackbar('Erreur', message, snackPosition: SnackPosition.TOP);
-      rethrow;
     } finally {
       isLoading.value = false;
     }
   }
 
-  Future<void> startSignup(String phone) async {
+  Future<void> startSignup({
+    required String phone,
+    required String firstName,
+    required String lastName,
+    required String password,
+    String? birthDate,
+  }) async {
     isLoading.value = true;
     try {
-      await _authService.startSignup(phone);
+      await _authService.startSignup(
+        phone: phone,
+        firstName: firstName,
+        lastName: lastName,
+        password: password,
+        birthDate: birthDate,
+      );
     } catch (e) {
       Get.snackbar('Erreur', e.toString().replaceAll('Exception: ', ''));
       rethrow;
@@ -143,44 +158,31 @@ class AuthController extends GetxController {
     }
   }
 
-  Future<void> verifyAndRegister({
+  Future<void> verifyOtp({
     required String phone,
-    required String password,
     required String code,
-    required String firstName,
-    required String lastName,
-    DateTime? birthDate,
   }) async {
     isLoading.value = true;
     try {
-      // 1. Verify OTP
-      final isVerified = await _authService.verifyOtp(phone, code);
-      if (isVerified['verified'] == true) {
-        // 2. Register
-        final res = await _authService.register(
-          phone: phone,
-          password: password,
-          firstName: firstName,
-          lastName: lastName,
-          birthDate: birthDate?.toIso8601String(),
-        );
-
+      final res = await _authService.verifyOtp(phone, code);
+      if (res['verified'] == true && res['token'] != null) {
         token.value = res['token'];
-        user.value = UserModel.fromJson(res['user']);
+        user.value = UserModel.fromJson(res['user'] as Map<String, dynamic>);
         if (user.value?.canUseOwnerApp != true) {
           token.value = null;
           user.value = null;
           throw Exception('ROLE_NON_AUTORISE');
         }
-
         final prefs = await SharedPreferences.getInstance();
         await prefs.setString('token', token.value!);
         await NotificationService.syncToken(token.value!);
-
         Get.offAllNamed(Routes.dashboard);
+      } else {
+        throw Exception('Vérification échouée');
       }
     } catch (e) {
       Get.snackbar('Erreur', e.toString().replaceAll('Exception: ', ''));
+      rethrow;
     } finally {
       isLoading.value = false;
     }
