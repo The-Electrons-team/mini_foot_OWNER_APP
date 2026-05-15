@@ -45,15 +45,16 @@ class _SplashScreenState extends State<SplashScreen>
     _fadeController.forward();
     _scaleController.forward();
 
-    _dotsController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 700),
-    )..addStatusListener((status) {
-        if (status == AnimationStatus.completed) {
-          if (mounted) setState(() => _activeDot = (_activeDot + 1) % 3);
-          _dotsController.forward(from: 0);
-        }
-      });
+    _dotsController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 700),
+        )..addStatusListener((status) {
+          if (status == AnimationStatus.completed) {
+            if (mounted) setState(() => _activeDot = (_activeDot + 1) % 3);
+            _dotsController.forward(from: 0);
+          }
+        });
     _dotsController.forward();
 
     _checkAuth();
@@ -62,17 +63,16 @@ class _SplashScreenState extends State<SplashScreen>
   void _checkAuth() async {
     final authController = Get.find<AuthController>();
     final isAuthenticated = await authController.checkAuthStatus();
-    
+
     await Future.delayed(const Duration(milliseconds: 1500));
     if (mounted) {
       if (isAuthenticated) {
-        Get.offAllNamed(Routes.dashboard);
+        authController.goToPostAuthDestination();
       } else {
         Get.offNamed(Routes.onboarding);
       }
     }
   }
-
 
   @override
   void dispose() {
@@ -165,9 +165,10 @@ class _BouncingDotsState extends State<_BouncingDots>
         duration: const Duration(milliseconds: 650),
       );
       _anims.add(
-        Tween<double>(begin: 0, end: -16).animate(
-          CurvedAnimation(parent: ctrl, curve: Curves.easeInOut),
-        ),
+        Tween<double>(
+          begin: 0,
+          end: -16,
+        ).animate(CurvedAnimation(parent: ctrl, curve: Curves.easeInOut)),
       );
       _controllers.add(ctrl);
     }

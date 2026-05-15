@@ -92,7 +92,8 @@ class _SubTerrainDraft {
     if (name.isEmpty || capacity == null || capacity <= 0) return null;
     if (!allowFull.value && !allowHalf.value && !allowThird.value) return null;
     final group =
-        divisionGroup ?? 'terrain_${index + 1}_${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_')}';
+        divisionGroup ??
+        'terrain_${index + 1}_${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_')}';
 
     SubTerrainModel unit(
       String label,
@@ -936,20 +937,20 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
                 _DivisionChip(
                   label: 'Entier',
                   selected: miniTerrain.allowFull.value,
-                  onTap: () =>
-                      miniTerrain.allowFull.value = !miniTerrain.allowFull.value,
+                  onTap: () => miniTerrain.allowFull.value =
+                      !miniTerrain.allowFull.value,
                 ),
                 _DivisionChip(
                   label: 'Demi',
                   selected: miniTerrain.allowHalf.value,
-                  onTap: () =>
-                      miniTerrain.allowHalf.value = !miniTerrain.allowHalf.value,
+                  onTap: () => miniTerrain.allowHalf.value =
+                      !miniTerrain.allowHalf.value,
                 ),
                 _DivisionChip(
                   label: 'Tiers',
                   selected: miniTerrain.allowThird.value,
-                  onTap: () =>
-                      miniTerrain.allowThird.value = !miniTerrain.allowThird.value,
+                  onTap: () => miniTerrain.allowThird.value =
+                      !miniTerrain.allowThird.value,
                 ),
               ],
             ),
@@ -1439,7 +1440,8 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
       subTerrainGroups.add(models);
     }
     final subTerrains = subTerrainGroups.expand((models) => models).toList();
-    if (subTerrains.isEmpty || subTerrainGroups.length != _miniTerrains.length) {
+    if (subTerrains.isEmpty ||
+        subTerrainGroups.length != _miniTerrains.length) {
       Get.snackbar(
         'Terrain incomplet',
         'Chaque terrain doit avoir un nom, une capacité valide et au moins une option réservable',
@@ -1869,9 +1871,7 @@ class _DivisionChip extends StatelessWidget {
           color: selected ? const Color(0xFF006F39) : Colors.white,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(
-            color: selected
-                ? const Color(0xFF006F39)
-                : const Color(0xFFE5E0D8),
+            color: selected ? const Color(0xFF006F39) : const Color(0xFFE5E0D8),
           ),
         ),
         child: Text(

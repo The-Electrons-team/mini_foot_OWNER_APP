@@ -4,11 +4,43 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   final String _baseUrl =
       dotenv.env['API_URL'] ?? 'http://localhost:3000/api/v1';
+
+  String _normalizePhone(String value) {
+    var digits = value.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('00221')) digits = digits.substring(5);
+    if (digits.startsWith('221')) digits = digits.substring(3);
+    return '+221$digits';
+  }
+
+  String _fileExtension(File file) {
+    final name = file.path.split(Platform.pathSeparator).last;
+    final dot = name.lastIndexOf('.');
+    if (dot == -1 || dot == name.length - 1) return 'jpg';
+    final ext = name
+        .substring(dot + 1)
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]'), '');
+    return ext.isEmpty ? 'jpg' : ext;
+  }
+
+  MediaType _imageContentType(File file) {
+    switch (_fileExtension(file)) {
+      case 'png':
+        return MediaType('image', 'png');
+      case 'webp':
+        return MediaType('image', 'webp');
+      case 'jpg':
+      case 'jpeg':
+      default:
+        return MediaType('image', 'jpeg');
+    }
+  }
 
   Future<String?> savedToken() async {
     final prefs = await SharedPreferences.getInstance();
@@ -22,7 +54,10 @@ class AuthService {
           .post(
             Uri.parse('$_baseUrl/auth/login'),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode({'phone': phone, 'password': password}),
+            body: jsonEncode({
+              'phone': _normalizePhone(phone),
+              'password': password,
+            }),
           )
           .timeout(const Duration(seconds: 15));
     } on TimeoutException {
@@ -49,14 +84,15 @@ class AuthService {
     required String firstName,
     required String lastName,
     required String password,
-    String? birthDate,
+    String? cniNumber,
   }) async {
+    final cleanCni = cniNumber?.replaceAll(RegExp(r'\D'), '');
     final body = <String, dynamic>{
-      'phone': phone,
+      'phone': _normalizePhone(phone),
       'firstName': firstName,
       'lastName': lastName,
       'password': password,
-      if (birthDate != null) 'birthDate': birthDate,
+      if (cleanCni != null && cleanCni.isNotEmpty) 'cniNumber': cleanCni,
     };
     late final http.Response response;
     try {
@@ -89,7 +125,7 @@ class AuthService {
     final response = await http.post(
       Uri.parse('$_baseUrl/auth/verify-otp'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone': phone, 'code': code}),
+      body: jsonEncode({'phone': _normalizePhone(phone), 'code': code}),
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) {
@@ -99,11 +135,76 @@ class AuthService {
     }
   }
 
+  Future<Map<String, dynamic>> resendOtp(String phone) async {
+    final response = await http.post(
+      Uri.parse('$_baseUrl/auth/resend-otp'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'phone': _normalizePhone(phone)}),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Impossible de renvoyer le code: ${response.body}');
+    }
+  }
+
+  Future<Map<String, dynamic>> uploadOwnerDocuments({
+    required String token,
+    required String cniNumber,
+    required File profilePhoto,
+    required File cniFront,
+    required File cniBack,
+  }) async {
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('$_baseUrl/auth/owner/documents'),
+    );
+    request.headers['Authorization'] = 'Bearer $token';
+    final cleanCni = cniNumber.replaceAll(RegExp(r'\D'), '');
+    request.fields['cniNumber'] = cleanCni;
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'profilePhoto',
+        profilePhoto.path,
+        filename: 'owner_profile_$cleanCni.${_fileExtension(profilePhoto)}',
+        contentType: _imageContentType(profilePhoto),
+      ),
+    );
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'cniFront',
+        cniFront.path,
+        filename: 'cni_recto_$cleanCni.${_fileExtension(cniFront)}',
+        contentType: _imageContentType(cniFront),
+      ),
+    );
+    request.files.add(
+      await http.MultipartFile.fromPath(
+        'cniBack',
+        cniBack.path,
+        filename: 'cni_verso_$cleanCni.${_fileExtension(cniBack)}',
+        contentType: _imageContentType(cniBack),
+      ),
+    );
+
+    final streamed = await request.send().timeout(const Duration(seconds: 30));
+    final body = await streamed.stream.bytesToString();
+    if (streamed.statusCode == 200 || streamed.statusCode == 201) {
+      final decoded = jsonDecode(body) as Map<String, dynamic>;
+      if (decoded['user'] is Map) {
+        decoded['user'] = _normalizeUser(decoded['user']);
+      }
+      return decoded;
+    }
+    throw Exception('Erreur upload documents: $body');
+  }
+
   Future<Map<String, dynamic>> forgotPassword(String phone) async {
     final response = await http.post(
       Uri.parse('$_baseUrl/auth/forgot-password'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone': phone}),
+      body: jsonEncode({'phone': _normalizePhone(phone)}),
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) {
@@ -123,7 +224,11 @@ class AuthService {
     final response = await http.post(
       Uri.parse('$_baseUrl/auth/reset-password'),
       headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'phone': phone, 'code': code, 'password': password}),
+      body: jsonEncode({
+        'phone': _normalizePhone(phone),
+        'code': code,
+        'password': password,
+      }),
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) {
@@ -249,7 +354,7 @@ class AuthService {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       },
-      body: jsonEncode({'phone': phone}),
+      body: jsonEncode({'phone': _normalizePhone(phone)}),
     );
 
     if (response.statusCode == 200 || response.statusCode == 201) return;
@@ -268,7 +373,7 @@ class AuthService {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',
       },
-      body: jsonEncode({'phone': phone, 'code': code}),
+      body: jsonEncode({'phone': _normalizePhone(phone), 'code': code}),
     );
 
     if (response.statusCode == 200) {
@@ -308,6 +413,8 @@ class AuthService {
   Map<String, dynamic> _normalizeUser(dynamic value) {
     final user = Map<String, dynamic>.from(value as Map);
     user['avatarUrl'] = _normalizeStorageUrl(user['avatarUrl']);
+    user['cniFrontUrl'] = _normalizeStorageUrl(user['cniFrontUrl']);
+    user['cniBackUrl'] = _normalizeStorageUrl(user['cniBackUrl']);
     return user;
   }
 
@@ -321,9 +428,16 @@ class AuthService {
         (uri.host == 'localhost' || uri.host == '127.0.0.1') &&
         uri.port == 9000;
     final bucket = uri.pathSegments.first;
-    if (!isLocalMinio || bucket != 'minifoot-avatars') return value;
+    if (!isLocalMinio ||
+        (bucket != 'minifoot-avatars' &&
+            bucket != 'minifoot-owner-documents')) {
+      return value;
+    }
 
     final key = uri.pathSegments.skip(1).join('/');
-    return '$_baseUrl/storage/avatars/$key';
+    final proxyBucket = bucket == 'minifoot-owner-documents'
+        ? 'ownerDocuments'
+        : 'avatars';
+    return '$_baseUrl/storage/$proxyBucket/$key';
   }
 }

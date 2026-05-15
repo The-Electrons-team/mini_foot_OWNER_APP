@@ -5,6 +5,11 @@ class UserModel {
   final String lastName;
   final String? birthDate;
   final String? avatarUrl;
+  final String? cniNumber;
+  final String? cniFrontUrl;
+  final String? cniBackUrl;
+  final String? ownerStatus;
+  final String? ownerRejectionReason;
   final String? createdAt;
   final String? position;
   final String? payoutWavePhone;
@@ -20,6 +25,11 @@ class UserModel {
     required this.lastName,
     this.birthDate,
     this.avatarUrl,
+    this.cniNumber,
+    this.cniFrontUrl,
+    this.cniBackUrl,
+    this.ownerStatus,
+    this.ownerRejectionReason,
     this.createdAt,
     this.position,
     this.payoutWavePhone,
@@ -37,6 +47,11 @@ class UserModel {
       lastName: json['lastName'] ?? '',
       birthDate: json['birthDate'],
       avatarUrl: json['avatarUrl'],
+      cniNumber: json['cniNumber'],
+      cniFrontUrl: json['cniFrontUrl'],
+      cniBackUrl: json['cniBackUrl'],
+      ownerStatus: json['ownerStatus']?.toString(),
+      ownerRejectionReason: json['ownerRejectionReason'],
       createdAt: json['createdAt'],
       position: json['position'],
       payoutWavePhone: json['payoutWavePhone'],
@@ -55,6 +70,11 @@ class UserModel {
       'lastName': lastName,
       'birthDate': birthDate,
       'avatarUrl': avatarUrl,
+      'cniNumber': cniNumber,
+      'cniFrontUrl': cniFrontUrl,
+      'cniBackUrl': cniBackUrl,
+      'ownerStatus': ownerStatus,
+      'ownerRejectionReason': ownerRejectionReason,
       'createdAt': createdAt,
       'position': position,
       'payoutWavePhone': payoutWavePhone,
@@ -68,4 +88,7 @@ class UserModel {
   bool get isController => role == 'CONTROLLER';
   bool get isOwner => role == 'OWNER';
   bool get canUseOwnerApp => isOwner || isController;
+  bool get isOwnerApproved => !isOwner || ownerStatus == 'APPROVED';
+  bool get isOwnerPending => isOwner && ownerStatus == 'PENDING';
+  bool get isOwnerRejected => isOwner && ownerStatus == 'REJECTED';
 }

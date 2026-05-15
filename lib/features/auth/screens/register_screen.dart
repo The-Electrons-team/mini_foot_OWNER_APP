@@ -1,9 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
-import 'package:intl/intl.dart';
+
 import '../../../core/theme/app_theme.dart';
 import '../controllers/auth_controller.dart';
 import 'otp_screen.dart';
@@ -13,496 +16,748 @@ class RegisterScreen extends GetView<AuthController> {
 
   @override
   Widget build(BuildContext context) {
-    final prenomCtrl = TextEditingController();
-    final nomCtrl = TextEditingController();
-    final phoneCtrl = TextEditingController();
-    final passCtrl = TextEditingController();
-    final confirmPassCtrl = TextEditingController();
-    final birthDate = Rxn<DateTime>();
+    return const _RegisterFlow();
+  }
+}
 
-    void selectDate() async {
-      final now = DateTime.now();
-      final picked = await showDatePicker(
-        context: context,
-        initialDate: DateTime(now.year - 18, 1, 1),
-        firstDate: DateTime(1930),
-        lastDate: DateTime(now.year - 5),
-        builder: (context, child) {
-          return Theme(
-            data: Theme.of(context).copyWith(
-              colorScheme: const ColorScheme.light(
-                primary: kGreen,
-                onPrimary: Colors.white,
-                onSurface: kTextPrim,
-              ),
-            ),
-            child: child!,
-          );
-        },
-      );
-      if (picked != null) birthDate.value = picked;
+class _RegisterFlow extends StatefulWidget {
+  const _RegisterFlow();
+
+  @override
+  State<_RegisterFlow> createState() => _RegisterFlowState();
+}
+
+class _RegisterFlowState extends State<_RegisterFlow> {
+  final AuthController controller = Get.find<AuthController>();
+  final PageController _pageController = PageController();
+  final ImagePicker _picker = ImagePicker();
+
+  final prenomCtrl = TextEditingController();
+  final nomCtrl = TextEditingController();
+  final phoneCtrl = TextEditingController();
+  final cniCtrl = TextEditingController();
+  final passCtrl = TextEditingController();
+  final confirmPassCtrl = TextEditingController();
+
+  File? profilePhoto;
+  File? cniFront;
+  File? cniBack;
+  int step = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    for (final ctrl in [
+      prenomCtrl,
+      nomCtrl,
+      phoneCtrl,
+      cniCtrl,
+      passCtrl,
+      confirmPassCtrl,
+    ]) {
+      ctrl.addListener(() => setState(() {}));
     }
+  }
 
-    void submit() async {
-      final phone = '+221${phoneCtrl.text.trim()}';
-      if (prenomCtrl.text.trim().isEmpty ||
-          nomCtrl.text.trim().isEmpty ||
-          phoneCtrl.text.trim().isEmpty ||
-          passCtrl.text.trim().isEmpty ||
-          birthDate.value == null) {
-        Get.snackbar(
-          'Champs requis',
-          'Veuillez remplir tous les champs personnels et le mot de passe',
-          backgroundColor: kRed,
-          colorText: Colors.white,
-          snackPosition: SnackPosition.TOP,
-        );
-        return;
-      }
+  @override
+  void dispose() {
+    _pageController.dispose();
+    prenomCtrl.dispose();
+    nomCtrl.dispose();
+    phoneCtrl.dispose();
+    cniCtrl.dispose();
+    passCtrl.dispose();
+    confirmPassCtrl.dispose();
+    super.dispose();
+  }
 
-      if (passCtrl.text != confirmPassCtrl.text) {
-        Get.snackbar(
-          'Erreur',
-          'Les mots de passe ne correspondent pas',
-          backgroundColor: kRed,
-          colorText: Colors.white,
-        );
-        return;
-      }
-      
-      if (passCtrl.text.length < 6) {
-        Get.snackbar(
-          'Erreur',
-          'Le mot de passe doit faire au moins 6 caractères',
-          backgroundColor: kRed,
-          colorText: Colors.white,
-        );
-        return;
-      }
+  String normalizePhone(String value) {
+    var digits = value.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('00221')) digits = digits.substring(5);
+    if (digits.startsWith('221')) digits = digits.substring(3);
+    return '+221$digits';
+  }
 
-      await controller.startSignup(
-        phone: phone,
-        firstName: prenomCtrl.text.trim(),
-        lastName: nomCtrl.text.trim(),
-        password: passCtrl.text.trim(),
-        birthDate: birthDate.value?.toIso8601String(),
-      );
+  String localPhone(String value) {
+    var digits = value.replaceAll(RegExp(r'\D'), '');
+    if (digits.startsWith('00221')) digits = digits.substring(5);
+    if (digits.startsWith('221')) digits = digits.substring(3);
+    return digits;
+  }
 
-      Get.to(
-        () => OtpScreen(phone: phone, isNewUser: true),
-        transition: Transition.rightToLeftWithFade,
-        duration: const Duration(milliseconds: 350),
-      );
-    }
+  String cleanCni(String value) => value.replaceAll(RegExp(r'\D'), '');
 
-    return Scaffold(
-      backgroundColor: kBg,
-      body: SafeArea(
-        child: SingleChildScrollView(
+  bool get isInfoValid =>
+      prenomCtrl.text.trim().length >= 2 &&
+      nomCtrl.text.trim().length >= 2 &&
+      localPhone(phoneCtrl.text).length == 9;
+
+  bool get isDocumentValid =>
+      cleanCni(cniCtrl.text).length == 13 &&
+      profilePhoto != null &&
+      cniFront != null &&
+      cniBack != null;
+
+  bool get isPasswordValid =>
+      passCtrl.text.trim().length >= 8 &&
+      confirmPassCtrl.text.trim() == passCtrl.text.trim();
+
+  bool get canContinue => step == 0
+      ? isInfoValid
+      : step == 1
+      ? isDocumentValid
+      : isPasswordValid;
+
+  Future<void> pickImage(ValueChanged<File> onPicked) async {
+    final source = await showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: kBgCard,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 14, 18, 18),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const SizedBox(height: 20),
-
-                    // Bouton retour
-                    GestureDetector(
-                      onTap: Get.back,
-                      child: Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: kBgSurface,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(
-                          PhosphorIcons.caretLeft(PhosphorIconsStyle.bold),
-                          color: kTextPrim,
-                          size: 20,
-                        ),
-                      ),
-                    ).animate().fadeIn(duration: 300.ms),
-
-                    const SizedBox(height: 24),
-
-                    // Titre
-                    const Text(
-                      'Créer votre compte',
-                      style: TextStyle(
-                        fontFamily: 'Orbitron',
-                        fontSize: 22,
-                        fontWeight: FontWeight.w900,
-                        color: kTextPrim,
-                        height: 1.3,
-                      ),
-                    ).animate().fadeIn(duration: 400.ms, delay: 100.ms).slideY(begin: 0.2, end: 0),
-
-                    const SizedBox(height: 6),
-
-                    const Text(
-                      'Rejoignez des milliers de propriétaires\nde terrains sur MiniFoot',
-                      style: TextStyle(fontSize: 14, color: kTextSub, height: 1.5),
-                    ).animate().fadeIn(duration: 400.ms, delay: 150.ms).slideY(begin: 0.2, end: 0),
-
-                    const SizedBox(height: 28),
-
-                    // Section identité
-                    _SectionHeader(
-                      icon: PhosphorIcons.identificationCard(PhosphorIconsStyle.duotone),
-                      label: 'Identité',
-                    ).animate().fadeIn(duration: 400.ms, delay: 180.ms),
-
-                    const SizedBox(height: 14),
-
-                    // Prénom + Nom côte à côte
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildField(
-                            label: 'Prénom',
-                            ctrl: prenomCtrl,
-                            icon: PhosphorIcons.user(PhosphorIconsStyle.duotone),
-                            hint: 'Mamadou',
-                          ).animate().fadeIn(duration: 400.ms, delay: 200.ms).slideY(begin: 0.15, end: 0),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _buildField(
-                            label: 'Nom',
-                            ctrl: nomCtrl,
-                            icon: PhosphorIcons.userCircle(PhosphorIconsStyle.duotone),
-                            hint: 'Diallo',
-                          ).animate().fadeIn(duration: 400.ms, delay: 220.ms).slideY(begin: 0.15, end: 0),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Date de naissance
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _Label('Date de naissance'),
-                        const SizedBox(height: 8),
-                        Obx(() => GestureDetector(
-                              onTap: selectDate,
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                                decoration: BoxDecoration(
-                                  color: kBgSurface,
-                                  borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: kBorder),
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(PhosphorIcons.calendar(PhosphorIconsStyle.duotone),
-                                        color: kTextLight, size: 20),
-                                    const SizedBox(width: 12),
-                                    Text(
-                                      birthDate.value == null
-                                          ? 'Sélectionner une date'
-                                          : DateFormat('dd/MM/yyyy').format(birthDate.value!),
-                                      style: TextStyle(
-                                        color: birthDate.value == null ? kTextLight : kTextPrim,
-                                        fontSize: 16,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )),
-                      ],
-                    ).animate().fadeIn(duration: 400.ms, delay: 240.ms).slideY(begin: 0.15, end: 0),
-
-                    const SizedBox(height: 24),
-
-                    // Section contact
-                    _SectionHeader(
-                      icon: PhosphorIcons.phone(PhosphorIconsStyle.duotone),
-                      label: 'Contact',
-                    ).animate().fadeIn(duration: 400.ms, delay: 260.ms),
-
-                    const SizedBox(height: 14),
-
-                    // Téléphone
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const _Label('Numéro de téléphone'),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: phoneCtrl,
-                          keyboardType: TextInputType.phone,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(9),
-                          ],
-                          style: const TextStyle(color: kTextPrim, fontSize: 16),
-                          decoration: InputDecoration(
-                            hintText: '77 000 00 00',
-                            prefixIcon: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: const [
-                                  Text('\u{1F1F8}\u{1F1F3}', style: TextStyle(fontSize: 20)),
-                                  SizedBox(width: 6),
-                                  Text(
-                                    '+221',
-                                    style: TextStyle(
-                                      color: kTextPrim,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  SizedBox(width: 6),
-                                  Text('|', style: TextStyle(color: kBorder, fontSize: 18)),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ).animate().fadeIn(duration: 400.ms, delay: 280.ms).slideY(begin: 0.15, end: 0),
-
-                    const SizedBox(height: 24),
-
-                    // Section Sécurité
-                    _SectionHeader(
-                      icon: PhosphorIcons.lock(PhosphorIconsStyle.duotone),
-                      label: 'Sécurité',
-                    ).animate().fadeIn(duration: 400.ms, delay: 300.ms),
-
-                    const SizedBox(height: 14),
-
-                    _buildField(
-                      label: 'Mot de passe',
-                      ctrl: passCtrl,
-                      icon: PhosphorIcons.lockSimple(PhosphorIconsStyle.duotone),
-                      hint: '••••••••',
-                      isPassword: true,
-                    ).animate().fadeIn(duration: 400.ms, delay: 320.ms).slideY(begin: 0.15, end: 0),
-
-                    const SizedBox(height: 16),
-
-                    _buildField(
-                      label: 'Confirmer le mot de passe',
-                      ctrl: confirmPassCtrl,
-                      icon: PhosphorIcons.lockKey(PhosphorIconsStyle.duotone),
-                      hint: '••••••••',
-                      isPassword: true,
-                    ).animate().fadeIn(duration: 400.ms, delay: 340.ms).slideY(begin: 0.15, end: 0),
-
-                    const SizedBox(height: 32),
-
-                    // Info OTP
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: kGreen.withValues(alpha: 0.05),
-                        borderRadius: BorderRadius.circular(14),
-                        border: Border.all(color: kGreen.withValues(alpha: 0.2)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            PhosphorIcons.shieldCheck(PhosphorIconsStyle.duotone),
-                            color: kGreen,
-                            size: 22,
-                          ),
-                          const SizedBox(width: 12),
-                          const Expanded(
-                            child: Text(
-                              'Un code de vérification sera envoyé sur votre téléphone pour valider votre identité.',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: kGreen,
-                                height: 1.5,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ).animate().fadeIn(duration: 400.ms, delay: 300.ms),
-
-                    const SizedBox(height: 32),
-
-                    // Bouton créer
-                    Obx(() => SizedBox(
-                          width: double.infinity,
-                          height: 54,
-                          child: ElevatedButton(
-                            onPressed: controller.isLoading.value ? null : submit,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: kGreen,
-                              foregroundColor: Colors.white,
-                              disabledBackgroundColor: kGreen.withValues(alpha: 0.5),
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(14),
-                              ),
-                            ),
-                            child: controller.isLoading.value
-                                ? const SizedBox(
-                                    width: 22,
-                                    height: 22,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2.5,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      const Text(
-                                        'Recevoir le code de vérification',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 15,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Icon(
-                                        PhosphorIcons.paperPlaneTilt(PhosphorIconsStyle.duotone),
-                                        color: Colors.white,
-                                        size: 20,
-                                      ),
-                                    ],
-                                  ),
-                          ),
-                        )).animate().fadeIn(duration: 400.ms, delay: 350.ms).slideY(begin: 0.1, end: 0),
-
-                    const SizedBox(height: 20),
-
-                    // Lien connexion
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Text(
-                          'Déjà un compte ? ',
-                          style: TextStyle(color: kTextSub, fontSize: 14),
-                        ),
-                        GestureDetector(
-                          onTap: controller.goToLogin,
-                          child: const Text(
-                            'Se connecter',
-                            style: TextStyle(
-                              color: kGreen,
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ).animate().fadeIn(duration: 400.ms, delay: 400.ms),
-
-                    const SizedBox(height: 32),
-                  ],
+              Container(
+                width: 42,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: kBorder,
+                  borderRadius: BorderRadius.circular(10),
                 ),
+              ),
+              const SizedBox(height: 14),
+              _SourceTile(
+                icon: PhosphorIcons.camera(PhosphorIconsStyle.duotone),
+                label: 'Prendre une photo',
+                onTap: () => Get.back(result: ImageSource.camera),
+              ),
+              _SourceTile(
+                icon: PhosphorIcons.image(PhosphorIconsStyle.duotone),
+                label: 'Choisir depuis la galerie',
+                onTap: () => Get.back(result: ImageSource.gallery),
               ),
             ],
           ),
         ),
       ),
     );
+    if (source == null) return;
+
+    final picked = await _picker.pickImage(source: source, imageQuality: 85);
+    if (picked != null) {
+      setState(() => onPicked(File(picked.path)));
+    }
   }
 
-  Widget _buildField({
-    required String label,
-    required TextEditingController ctrl,
-    required IconData icon,
-    required String hint,
-    bool isPassword = false,
-    TextInputType keyboardType = TextInputType.text,
-    List<TextInputFormatter>? inputFormatters,
-  }) {
-    final obscure = true.obs;
+  void next() {
+    if (step == 0) {
+      final phone = localPhone(phoneCtrl.text);
+      phoneCtrl.text = phone;
+      if (!isInfoValid) {
+        Get.snackbar(
+          'Champs requis',
+          'Renseignez votre prénom, nom et les 9 chiffres du téléphone.',
+          snackPosition: SnackPosition.TOP,
+        );
+        return;
+      }
+    }
 
+    if (step == 1) {
+      cniCtrl.text = cleanCni(cniCtrl.text);
+      if (!isDocumentValid) {
+        Get.snackbar(
+          'Documents requis',
+          'La CNI doit contenir 13 chiffres, avec photo profil, recto et verso.',
+          snackPosition: SnackPosition.TOP,
+        );
+        return;
+      }
+    }
+
+    if (step < 2) {
+      setState(() => step++);
+      _pageController.nextPage(
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOut,
+      );
+    }
+  }
+
+  Future<void> submit() async {
+    final password = passCtrl.text.trim();
+    if (password.length < 8) {
+      Get.snackbar(
+        'Mot de passe',
+        'Le mot de passe doit faire au moins 8 caractères.',
+        snackPosition: SnackPosition.TOP,
+      );
+      return;
+    }
+    if (password != confirmPassCtrl.text.trim()) {
+      Get.snackbar(
+        'Mot de passe',
+        'Les mots de passe ne correspondent pas.',
+        snackPosition: SnackPosition.TOP,
+      );
+      return;
+    }
+
+    final phone = normalizePhone(phoneCtrl.text);
+    await controller.startSignup(
+      phone: phone,
+      firstName: prenomCtrl.text.trim(),
+      lastName: nomCtrl.text.trim(),
+      password: password,
+      cniNumber: cleanCni(cniCtrl.text),
+    );
+
+    Get.to(
+      () => OtpScreen(
+        phone: phone,
+        isNewUser: true,
+        cniNumber: cleanCni(cniCtrl.text),
+        profilePhotoPath: profilePhoto!.path,
+        cniFrontPath: cniFront!.path,
+        cniBackPath: cniBack!.path,
+      ),
+      transition: Transition.rightToLeftWithFade,
+      duration: const Duration(milliseconds: 350),
+    );
+  }
+
+  void back() {
+    if (step == 0) {
+      Get.back();
+      return;
+    }
+    setState(() => step--);
+    _pageController.previousPage(
+      duration: const Duration(milliseconds: 240),
+      curve: Curves.easeOut,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: kBg,
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 26),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  GestureDetector(
+                    onTap: back,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 12),
+                      child: Icon(
+                        PhosphorIcons.caretLeft(PhosphorIconsStyle.bold),
+                        color: kTextPrim,
+                        size: 24,
+                      ),
+                    ),
+                  ).animate().fadeIn(duration: 250.ms),
+                  const Expanded(
+                    child: Center(
+                      child: Text(
+                        'MINIFOOT',
+                        style: TextStyle(
+                          fontFamily: 'Orbitron',
+                          color: kGreen,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w900,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 32),
+              Text(
+                step == 0
+                    ? 'Créer votre compte'
+                    : step == 1
+                    ? 'Vérification'
+                    : 'Mot de passe',
+                style: const TextStyle(
+                  fontFamily: 'Orbitron',
+                  color: kTextPrim,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                step == 0
+                    ? 'Quelques informations pour ouvrir votre espace gérant.'
+                    : step == 1
+                    ? 'Ajoutez vos documents pour la validation admin.'
+                    : 'Choisissez un mot de passe pour sécuriser le compte.',
+                style: const TextStyle(
+                  color: kTextSub,
+                  fontSize: 13,
+                  height: 1.5,
+                ),
+              ),
+              const SizedBox(height: 22),
+              _StepperDots(active: step),
+              const SizedBox(height: 22),
+              Expanded(
+                child: PageView(
+                  controller: _pageController,
+                  physics: const NeverScrollableScrollPhysics(),
+                  children: [
+                    _InfoStep(
+                      firstNameCtrl: prenomCtrl,
+                      lastNameCtrl: nomCtrl,
+                      phoneCtrl: phoneCtrl,
+                    ),
+                    _DocumentStep(
+                      cniCtrl: cniCtrl,
+                      profilePhoto: profilePhoto,
+                      cniFront: cniFront,
+                      cniBack: cniBack,
+                      onProfile: () => pickImage((file) => profilePhoto = file),
+                      onFront: () => pickImage((file) => cniFront = file),
+                      onBack: () => pickImage((file) => cniBack = file),
+                    ),
+                    _PasswordStep(
+                      passwordCtrl: passCtrl,
+                      confirmCtrl: confirmPassCtrl,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Obx(
+                () => SizedBox(
+                  width: double.infinity,
+                  height: 54,
+                  child: ElevatedButton(
+                    onPressed: controller.isLoading.value
+                        ? null
+                        : !canContinue
+                        ? null
+                        : step == 2
+                        ? submit
+                        : next,
+                    child: controller.isLoading.value
+                        ? const SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2.5,
+                            ),
+                          )
+                        : Text(step == 2 ? 'Créer mon compte' : 'Continuer'),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Center(
+                child: GestureDetector(
+                  onTap: controller.goToLogin,
+                  child: const Text(
+                    'Déjà un compte ? Se connecter',
+                    style: TextStyle(
+                      color: kGreen,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 22),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InfoStep extends StatelessWidget {
+  final TextEditingController firstNameCtrl;
+  final TextEditingController lastNameCtrl;
+  final TextEditingController phoneCtrl;
+
+  const _InfoStep({
+    required this.firstNameCtrl,
+    required this.lastNameCtrl,
+    required this.phoneCtrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        children: [
+          _InputField(
+            controller: firstNameCtrl,
+            label: 'Prénom',
+            hint: 'Mamadou',
+            icon: PhosphorIcons.user(PhosphorIconsStyle.duotone),
+          ),
+          const SizedBox(height: 14),
+          _InputField(
+            controller: lastNameCtrl,
+            label: 'Nom',
+            hint: 'Diallo',
+            icon: PhosphorIcons.userCircle(PhosphorIconsStyle.duotone),
+          ),
+          const SizedBox(height: 14),
+          _PhoneField(controller: phoneCtrl),
+        ],
+      ),
+    );
+  }
+}
+
+class _DocumentStep extends StatelessWidget {
+  final TextEditingController cniCtrl;
+  final File? profilePhoto;
+  final File? cniFront;
+  final File? cniBack;
+  final VoidCallback onProfile;
+  final VoidCallback onFront;
+  final VoidCallback onBack;
+
+  const _DocumentStep({
+    required this.cniCtrl,
+    required this.profilePhoto,
+    required this.cniFront,
+    required this.cniBack,
+    required this.onProfile,
+    required this.onFront,
+    required this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        children: [
+          _InputField(
+            controller: cniCtrl,
+            label: 'Numéro CNI',
+            hint: '13 chiffres',
+            icon: PhosphorIcons.identificationCard(PhosphorIconsStyle.duotone),
+            keyboardType: TextInputType.number,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(13),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _DocumentPicker(
+            label: 'Photo de profil',
+            file: profilePhoto,
+            icon: PhosphorIcons.userCircle(PhosphorIconsStyle.duotone),
+            onTap: onProfile,
+          ),
+          const SizedBox(height: 12),
+          _DocumentPicker(
+            label: 'CNI recto',
+            file: cniFront,
+            icon: PhosphorIcons.cardholder(PhosphorIconsStyle.duotone),
+            onTap: onFront,
+          ),
+          const SizedBox(height: 12),
+          _DocumentPicker(
+            label: 'CNI verso',
+            file: cniBack,
+            icon: PhosphorIcons.cardholder(PhosphorIconsStyle.duotone),
+            onTap: onBack,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PasswordStep extends StatelessWidget {
+  final TextEditingController passwordCtrl;
+  final TextEditingController confirmCtrl;
+
+  const _PasswordStep({required this.passwordCtrl, required this.confirmCtrl});
+
+  @override
+  Widget build(BuildContext context) {
+    final obscure = true.obs;
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        children: [
+          Obx(
+            () => _InputField(
+              controller: passwordCtrl,
+              label: 'Mot de passe',
+              hint: 'Minimum 8 caractères',
+              icon: PhosphorIcons.lockSimple(PhosphorIconsStyle.duotone),
+              obscureText: obscure.value,
+              suffix: IconButton(
+                onPressed: obscure.toggle,
+                icon: Icon(
+                  obscure.value
+                      ? PhosphorIcons.eyeClosed()
+                      : PhosphorIcons.eye(),
+                  color: kTextLight,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Obx(
+            () => _InputField(
+              controller: confirmCtrl,
+              label: 'Confirmer le mot de passe',
+              hint: 'Retapez le mot de passe',
+              icon: PhosphorIcons.lockKey(PhosphorIconsStyle.duotone),
+              obscureText: obscure.value,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PhoneField extends StatelessWidget {
+  final TextEditingController controller;
+
+  const _PhoneField({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _Label(label),
+        const Text(
+          'Numéro de téléphone',
+          style: TextStyle(
+            color: kTextSub,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 8),
-        isPassword 
-          ? Obx(() => TextField(
-              controller: ctrl,
-              keyboardType: keyboardType,
-              obscureText: obscure.value,
-              inputFormatters: inputFormatters,
-              style: const TextStyle(color: kTextPrim, fontSize: 16),
-              decoration: InputDecoration(
-                hintText: hint,
-                prefixIcon: Icon(icon, color: kTextLight, size: 20),
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    obscure.value ? PhosphorIcons.eyeClosed() : PhosphorIcons.eye(),
-                    color: kTextLight,
-                  ),
-                  onPressed: () => obscure.toggle(),
-                ),
-              ),
-            ))
-          : TextField(
-              controller: ctrl,
-              keyboardType: keyboardType,
-              inputFormatters: inputFormatters,
-              style: const TextStyle(color: kTextPrim, fontSize: 16),
-              decoration: InputDecoration(
-                hintText: hint,
-                prefixIcon: Icon(icon, color: kTextLight, size: 20),
+        TextField(
+          controller: controller,
+          keyboardType: TextInputType.phone,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(12),
+          ],
+          style: const TextStyle(color: kTextPrim, fontSize: 16),
+          decoration: const InputDecoration(
+            hintText: '77 000 00 00',
+            prefixIcon: Padding(
+              padding: EdgeInsets.symmetric(horizontal: 12),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('\u{1F1F8}\u{1F1F3}', style: TextStyle(fontSize: 20)),
+                  SizedBox(width: 10),
+                  SizedBox(height: 22, child: VerticalDivider(color: kBorder)),
+                ],
               ),
             ),
+            prefixIconConstraints: BoxConstraints(minWidth: 66),
+          ),
+        ),
       ],
     );
   }
 }
 
-class _SectionHeader extends StatelessWidget {
+class _InputField extends StatelessWidget {
+  final TextEditingController controller;
+  final String label;
+  final String? hint;
+  final IconData icon;
+  final bool obscureText;
+  final Widget? suffix;
+  final TextInputType? keyboardType;
+  final List<TextInputFormatter>? inputFormatters;
+
+  const _InputField({
+    required this.controller,
+    required this.label,
+    this.hint,
+    required this.icon,
+    this.obscureText = false,
+    this.suffix,
+    this.keyboardType,
+    this.inputFormatters,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: kTextSub,
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          obscureText: obscureText,
+          keyboardType: keyboardType,
+          inputFormatters: inputFormatters,
+          style: const TextStyle(color: kTextPrim, fontSize: 16),
+          decoration: InputDecoration(
+            hintText: hint,
+            prefixIcon: Icon(icon, color: kGreen, size: 20),
+            suffixIcon: suffix,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DocumentPicker extends StatelessWidget {
+  final String label;
+  final File? file;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _DocumentPicker({
+    required this.label,
+    required this.file,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final hasFile = file != null;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: kBgSurface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: hasFile ? kGreen : kBorder),
+        ),
+        child: Row(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: SizedBox(
+                width: 58,
+                height: 58,
+                child: hasFile
+                    ? Image.file(file!, fit: BoxFit.cover)
+                    : Container(
+                        color: kBorder.withValues(alpha: 0.35),
+                        child: Icon(icon, color: kTextLight, size: 24),
+                      ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      color: kTextPrim,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    hasFile ? 'Image ajoutée' : 'Appuyez pour ajouter',
+                    style: TextStyle(
+                      color: hasFile ? kGreen : kTextLight,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              hasFile
+                  ? PhosphorIcons.checkCircle(PhosphorIconsStyle.duotone)
+                  : PhosphorIcons.plusCircle(PhosphorIconsStyle.duotone),
+              color: hasFile ? kGreen : kTextLight,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SourceTile extends StatelessWidget {
   final IconData icon;
   final String label;
-  const _SectionHeader({required this.icon, required this.label});
+  final VoidCallback onTap;
+
+  const _SourceTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      onTap: onTap,
+      leading: Icon(icon, color: kGreen),
+      title: Text(
+        label,
+        style: const TextStyle(fontWeight: FontWeight.w700, color: kTextPrim),
+      ),
+    );
+  }
+}
+
+class _StepperDots extends StatelessWidget {
+  final int active;
+
+  const _StepperDots({required this.active});
 
   @override
   Widget build(BuildContext context) {
     return Row(
-      children: [
-        Icon(icon, color: kGreen, size: 18),
-        const SizedBox(width: 8),
-        Text(
-          label.toUpperCase(),
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: kGreen,
-            letterSpacing: 1.5,
+      children: List.generate(3, (index) {
+        final isActive = index <= active;
+        return Expanded(
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 220),
+            height: 4,
+            margin: EdgeInsets.only(right: index == 2 ? 0 : 8),
+            decoration: BoxDecoration(
+              color: isActive ? kGreen : kBorder,
+              borderRadius: BorderRadius.circular(10),
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Container(height: 1, color: kBorder),
-        ),
-      ],
+        );
+      }),
     );
   }
-}
-
-class _Label extends StatelessWidget {
-  final String text;
-  const _Label(this.text);
-
-  @override
-  Widget build(BuildContext context) => Text(
-        text,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: kTextSub,
-        ),
-      );
 }

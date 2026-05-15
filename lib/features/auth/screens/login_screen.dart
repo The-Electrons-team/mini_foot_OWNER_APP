@@ -422,7 +422,6 @@ class _ForgotPasswordSheetState extends State<_ForgotPasswordSheet> {
         code: code,
         password: password,
       );
-      Get.back();
     } catch (_) {}
   }
 

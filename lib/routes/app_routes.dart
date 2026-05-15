@@ -6,6 +6,7 @@ import '../features/auth/screens/onboarding_screen.dart';
 import '../features/auth/screens/login_screen.dart';
 import '../features/auth/screens/register_screen.dart';
 import '../features/auth/screens/otp_screen.dart';
+import '../features/auth/screens/owner_pending_screen.dart';
 import '../features/dashboard/bindings/dashboard_binding.dart';
 import '../features/dashboard/screens/dashboard_screen.dart';
 import '../features/terrain/bindings/terrain_binding.dart';
@@ -42,6 +43,7 @@ abstract class Routes {
   static const login = '/login';
   static const register = '/register';
   static const otp = '/otp';
+  static const ownerPending = '/owner-pending';
   static const dashboard = '/dashboard';
   static const terrainList = '/terrains';
   static const terrainForm = '/terrains/form';
@@ -123,6 +125,13 @@ final appPages = [
     middlewares: [_OwnerOnlyMiddleware()],
     transition: Transition.rightToLeftWithFade,
     transitionDuration: const Duration(milliseconds: 300),
+  ),
+  GetPage(
+    name: Routes.ownerPending,
+    page: () => const OwnerPendingScreen(),
+    binding: AuthBinding(),
+    transition: Transition.fadeIn,
+    transitionDuration: const Duration(milliseconds: 350),
   ),
   GetPage(
     name: Routes.reservations,
@@ -234,13 +243,16 @@ class _OwnerOnlyMiddleware extends GetMiddleware {
   RouteSettings? redirect(String? route) {
     if (!Get.isRegistered<AuthController>()) return null;
     final auth = Get.find<AuthController>();
-    if (auth.user.value?.isOwner == true) return null;
+    if (auth.user.value?.isOwner == true &&
+        auth.user.value?.isOwnerApproved == true) {
+      return null;
+    }
 
     Get.snackbar(
-      'Accès réservé',
-      'Cette action est réservée au propriétaire du terrain.',
+      'Validation requise',
+      'Votre compte gérant doit être validé avant cette action.',
       snackPosition: SnackPosition.TOP,
     );
-    return const RouteSettings(name: Routes.dashboard);
+    return const RouteSettings(name: Routes.ownerPending);
   }
 }
