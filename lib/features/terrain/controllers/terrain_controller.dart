@@ -1,5 +1,5 @@
-import 'dart:io';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/services/terrain_service.dart';
 import '../../../routes/app_routes.dart';
 
@@ -374,7 +374,7 @@ class TerrainController extends GetxController {
     String? description,
     required List<String> features,
     required List<SubTerrainModel> subTerrains,
-    List<File> images = const [],
+    List<XFile> images = const [],
     String? managerId,
   }) async {
     final data = <String, dynamic>{

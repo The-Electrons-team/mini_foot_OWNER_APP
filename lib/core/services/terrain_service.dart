@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class TerrainService {
@@ -165,19 +165,31 @@ class TerrainService {
   }
 
   // ── POST /terrains/:id/images ──────────────────────────────────────────────
-  Future<void> uploadImages(String terrainId, List<File> images) async {
+  Future<void> uploadImages(String terrainId, List<XFile> images) async {
     final token = await _token();
     final request = http.MultipartRequest(
       'POST',
       Uri.parse('$_base/terrains/$terrainId/images'),
     );
     request.headers['Authorization'] = 'Bearer $token';
-    for (final image in images) {
-      request.files.add(await http.MultipartFile.fromPath('files', image.path));
+    for (var index = 0; index < images.length; index++) {
+      final image = images[index];
+      final bytes = await image.readAsBytes();
+      final extension = _extensionFromName(image.name);
+      final filename =
+          'terrain-${DateTime.now().microsecondsSinceEpoch}-$index$extension';
+      request.files.add(
+        http.MultipartFile.fromBytes('files', bytes, filename: filename),
+      );
     }
     final response = await request.send();
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw Exception('Erreur upload images');
     }
+  }
+
+  String _extensionFromName(String name) {
+    final match = RegExp(r'\.[a-zA-Z0-9]{2,5}$').firstMatch(name);
+    return match?.group(0)?.toLowerCase() ?? '.jpg';
   }
 }

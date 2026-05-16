@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:get/get.dart';
-import 'package:lottie/lottie.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../core/widgets/shimmer_loading.dart';
 import '../controllers/terrain_controller.dart';
@@ -243,63 +242,42 @@ class TerrainListScreen extends GetView<TerrainController> {
 
   Widget _buildEmptyState() {
     final hasAnyTerrain = controller.totalTerrains > 0;
+    if (!hasAnyTerrain) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: ElevatedButton.icon(
+            onPressed: () => controller.goToForm(null),
+            icon: const Icon(PhosphorIconsLight.plus, size: 20),
+            label: const Text('Ajouter un complexe'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF006F39),
+              foregroundColor: Colors.white,
+              minimumSize: const Size(double.infinity, 52),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              elevation: 0,
+            ),
+          ),
+        ),
+      ).animate().fadeIn(duration: 250.ms);
+    }
+
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(40),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Lottie.asset(
-              'assets/lottie/football_bounce.json',
-              width: 140,
-              height: 140,
-              repeat: true,
-            ),
-            const SizedBox(height: 20),
-            Text(
-              hasAnyTerrain ? 'Aucun résultat' : 'Aucun complexe',
-              style: const TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.w700,
-                color: Color(0xFF1A1A1A),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              hasAnyTerrain
-                  ? 'Essayez une autre recherche\nou un autre filtre.'
-                  : 'Ajoutez votre premier complexe\npour commencer.',
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Color(0xFF6B7280),
-                height: 1.5,
-              ),
-            ),
-            if (!hasAnyTerrain) ...[
-              const SizedBox(height: 20),
-              ElevatedButton.icon(
-                onPressed: () => controller.goToForm(null),
-                icon: const Icon(PhosphorIconsLight.plus, size: 18),
-                label: const Text('Ajouter un complexe'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF006F39),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 18,
-                    vertical: 12,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  elevation: 0,
-                ),
-              ),
-            ],
-          ],
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Text(
+          'Aucun résultat',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+            color: const Color(0xFF1A1A1A).withValues(alpha: 0.72),
+          ),
         ),
       ),
-    ).animate().fadeIn(duration: 500.ms);
+    ).animate().fadeIn(duration: 250.ms);
   }
 }
 
