@@ -539,7 +539,13 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
             elevation: 0,
             leading: Center(
               child: GestureDetector(
-                onTap: _ctrl.goBack,
+                onTap: () {
+                  if (_step.value > 0) {
+                    _goPrevious();
+                  } else {
+                    _ctrl.goBack();
+                  }
+                },
                 child: Container(
                   width: 40,
                   height: 40,

@@ -4,6 +4,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:phosphor_flutter/phosphor_flutter.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../routes/app_routes.dart';
 import '../controllers/dashboard_controller.dart';
 
 // ─── Constantes de layout ────────────────────────────────────────────────────
@@ -238,7 +239,7 @@ class DashboardScreen extends GetView<DashboardController> {
                 ),
                 _ActionData(
                   icon: PhosphorIcons.usersThree(PhosphorIconsStyle.duotone),
-                  label: 'Controllers',
+                  label: 'Contrôleurs',
                   subtitle: 'Accès & suivi',
                   color: kBlue,
                   bgColor: kBlueLight,
@@ -623,12 +624,12 @@ class DashboardScreen extends GetView<DashboardController> {
                       ),
                       label: controller.isController ? 'Réserv.' : 'Terrains',
                       isSelected: controller.selectedTab.value == 1,
-                      onTap: () {
-                        controller.changeTab(1);
+                      onTap: () => controller.openBottomTab(
+                        1,
                         controller.isController
-                            ? controller.goToReservations()
-                            : controller.goToTerrains();
-                      },
+                            ? Routes.reservations
+                            : Routes.terrainList,
+                      ),
                     ),
                     const SizedBox(width: 72),
                     _NavItem(
@@ -639,21 +640,19 @@ class DashboardScreen extends GetView<DashboardController> {
                           : PhosphorIcons.wallet(PhosphorIconsStyle.duotone),
                       label: controller.isController ? 'Créneaux' : 'Paiements',
                       isSelected: controller.selectedTab.value == 3,
-                      onTap: () {
-                        controller.changeTab(3);
+                      onTap: () => controller.openBottomTab(
+                        3,
                         controller.isController
-                            ? controller.goToAvailability()
-                            : controller.goToPayments();
-                      },
+                            ? Routes.availability
+                            : Routes.payments,
+                      ),
                     ),
                     _NavItem(
                       icon: PhosphorIcons.user(PhosphorIconsStyle.duotone),
                       label: 'Profil',
                       isSelected: controller.selectedTab.value == 4,
-                      onTap: () {
-                        controller.changeTab(4);
-                        controller.goToProfile();
-                      },
+                      onTap: () =>
+                          controller.openBottomTab(4, Routes.profile),
                     ),
                   ],
                 ),
@@ -661,10 +660,8 @@ class DashboardScreen extends GetView<DashboardController> {
               Positioned(
                 bottom: 20,
                 child: GestureDetector(
-                  onTap: () {
-                    controller.changeTab(2);
-                    controller.goToQrCheckIn();
-                  },
+                  onTap: () =>
+                      controller.openBottomTab(2, Routes.qrCheckIn),
                   child: Container(
                     width: 64,
                     height: 64,

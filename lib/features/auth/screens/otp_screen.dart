@@ -174,10 +174,10 @@ class _OtpScreenState extends State<OtpScreen> {
               color: kBgSurface,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              PhosphorIcons.arrowLeft(PhosphorIconsStyle.duotone),
+            child: const Icon(
+              Icons.arrow_back_ios_new_rounded,
               color: kTextPrim,
-              size: 20,
+              size: 18,
             ),
           ),
         ),

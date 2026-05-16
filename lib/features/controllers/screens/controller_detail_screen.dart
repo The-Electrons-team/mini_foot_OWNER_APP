@@ -44,8 +44,8 @@ class _ControllerDetailScreenState extends State<ControllerDetailScreen> {
         elevation: 0,
         leading: IconButton(
           onPressed: Get.back,
-          icon: Icon(
-            PhosphorIcons.arrowLeft(PhosphorIconsStyle.duotone),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
             size: 18,
           ),
         ),
@@ -94,15 +94,6 @@ class _ControllerDetailScreenState extends State<ControllerDetailScreen> {
                     value: '${item.blockedSlots}',
                     icon: PhosphorIcons.lock(PhosphorIconsStyle.duotone),
                     color: kGold,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: _MetricCard(
-                    label: 'Gain aujourd’hui',
-                    value: _formatAmount(item.amountEarned),
-                    icon: PhosphorIcons.wallet(PhosphorIconsStyle.duotone),
-                    color: kOrange,
                   ),
                 ),
               ],

@@ -110,6 +110,15 @@ class DashboardController extends GetxController {
 
   void changeTab(int i) => selectedTab.value = i;
 
+  Future<void> openBottomTab(int tabIndex, String route) async {
+    selectedTab.value = tabIndex;
+    try {
+      await Get.toNamed(route);
+    } finally {
+      selectedTab.value = 0;
+    }
+  }
+
   void goToTerrains() => Get.toNamed(Routes.terrainList);
   void goToReservations() => Get.toNamed(Routes.reservations);
   void goToAvailability() => Get.toNamed(Routes.availability);

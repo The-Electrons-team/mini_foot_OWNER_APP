@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme/app_theme.dart';
 import 'core/services/notification_service.dart';
+import 'features/auth/bindings/auth_binding.dart';
 import 'routes/app_routes.dart';
 
 String? _envValue(String key) {
@@ -90,6 +91,7 @@ class OwnerApp extends StatelessWidget {
       title: 'MiniFoot Owner',
       debugShowCheckedModeBanner: false,
       theme: appTheme,
+      initialBinding: AuthBinding(),
       initialRoute: Routes.splash,
       getPages: appPages,
       defaultTransition: Transition.fadeIn,

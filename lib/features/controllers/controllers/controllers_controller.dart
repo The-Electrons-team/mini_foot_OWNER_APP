@@ -185,7 +185,6 @@ class ControllersController extends GetxController {
     required String lastName,
     required String phone,
     required List<String> terrainIds,
-    required int commissionPerCheckIn,
   }) async {
     try {
       final result = await _service.createController(
@@ -193,7 +192,6 @@ class ControllersController extends GetxController {
         lastName: lastName,
         phone: phone,
         terrainIds: terrainIds,
-        commissionPerCheckIn: commissionPerCheckIn,
       );
       await refreshAll();
       return result['credentials'] as Map<String, dynamic>?;

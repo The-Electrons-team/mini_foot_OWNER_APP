@@ -216,16 +216,58 @@ class TerrainModel {
   }
 
   String get displayPriceRange {
-    final prices = [
-      pricePerHour,
-      ...subTerrains
-          .map((subTerrain) => subTerrain.pricePerHour)
-          .whereType<int>(),
-    ]..sort();
+    final allPrices = <int>{pricePerHour};
+    for (final sub in subTerrains) {
+      if (sub.pricePerHour != null) allPrices.add(sub.pricePerHour!);
+      for (final period in sub.pricingPeriods) {
+        allPrices.add(period.pricePerHour);
+      }
+    }
 
+    final prices = allPrices.toList()..sort();
     if (prices.isEmpty) return '$pricePerHour F/h';
-    if (prices.first == prices.last) return '${prices.first} F/h';
+    if (prices.length == 1) return '${prices.first} F/h';
     return '${prices.first} - ${prices.last} F/h';
+  }
+}
+
+class TerrainReviewModel {
+  final String id;
+  final String terrainId;
+  final String userId;
+  final double rating;
+  final String? comment;
+  final String userName;
+  final String? userAvatar;
+  final DateTime createdAt;
+
+  TerrainReviewModel({
+    required this.id,
+    required this.terrainId,
+    required this.userId,
+    required this.rating,
+    this.comment,
+    required this.userName,
+    this.userAvatar,
+    required this.createdAt,
+  });
+
+  factory TerrainReviewModel.fromJson(Map<String, dynamic> json) {
+    final user = json['user'] as Map<String, dynamic>?;
+    return TerrainReviewModel(
+      id: json['id']?.toString() ?? '',
+      terrainId: json['terrainId']?.toString() ?? '',
+      userId: json['userId']?.toString() ?? '',
+      rating: (json['rating'] ?? 0).toDouble(),
+      comment: json['comment'],
+      userName: user != null
+          ? '${user['firstName'] ?? user['first_name']} ${user['lastName'] ?? user['last_name']}'
+          : 'Anonyme',
+      userAvatar: user?['avatarUrl'] ?? user?['avatar_url'],
+      createdAt: DateTime.parse(
+        json['createdAt'] ?? DateTime.now().toIso8601String(),
+      ),
+    );
   }
 }
 
@@ -236,6 +278,10 @@ class TerrainController extends GetxController {
   final allTerrains = <TerrainModel>[].obs;
   final isLoading = false.obs;
   final selectedTerrain = Rxn<TerrainModel>();
+  final reviews = <TerrainReviewModel>[].obs;
+  final isLoadingReviews = false.obs;
+  final currentPhotoIndex = 0.obs;
+  final selectedTabIndex = 0.obs;
   final searchQuery = ''.obs;
   final statusFilter = 'all'.obs;
 
@@ -357,6 +403,28 @@ class TerrainController extends GetxController {
         }
       },
     );
+  }
+
+  void goToDetail(TerrainModel terrain) {
+    selectedTerrain.value = terrain;
+    reviews.clear();
+    currentPhotoIndex.value = 0;
+    loadReviews(terrain.id);
+    Get.toNamed(Routes.terrainDetail);
+  }
+
+  Future<void> loadReviews(String terrainId) async {
+    isLoadingReviews.value = true;
+    try {
+      final data = await _service.getReviews(terrainId);
+      reviews.value = data
+          .map((e) => TerrainReviewModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      print('Erreur chargement avis: $e');
+    } finally {
+      isLoadingReviews.value = false;
+    }
   }
 
   void goToForm(TerrainModel? terrain) {

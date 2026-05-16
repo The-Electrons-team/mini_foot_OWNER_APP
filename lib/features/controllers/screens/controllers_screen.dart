@@ -20,13 +20,13 @@ class ControllersScreen extends GetView<ControllersController> {
         elevation: 0,
         leading: IconButton(
           onPressed: Get.back,
-          icon: Icon(
-            PhosphorIcons.arrowLeft(PhosphorIconsStyle.duotone),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
             size: 18,
           ),
         ),
         title: const Text(
-          'Controllers',
+          'Contrôleurs',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
         ),
         centerTitle: true,
@@ -49,7 +49,7 @@ class ControllersScreen extends GetView<ControllersController> {
                 Icon(Icons.badge_outlined, color: kGreen, size: 54),
                 SizedBox(height: 16),
                 Text(
-                  'Aucun controller',
+                  'Aucun contrôleur',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: kTextPrim,
@@ -102,7 +102,6 @@ class ControllersScreen extends GetView<ControllersController> {
     final firstNameCtrl = TextEditingController();
     final lastNameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController(text: '+221');
-    final commissionCtrl = TextEditingController(text: '500');
     final selectedTerrains = <String>{}.obs;
 
     Get.bottomSheet(
@@ -134,7 +133,7 @@ class ControllersScreen extends GetView<ControllersController> {
               ),
               const SizedBox(height: 18),
               const Text(
-                'Nouveau controller',
+                'Nouveau contrôleur',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w800,
@@ -157,15 +156,7 @@ class ControllersScreen extends GetView<ControllersController> {
                 keyboardType: TextInputType.phone,
                 decoration: const InputDecoration(labelText: 'Téléphone'),
               ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: commissionCtrl,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Gain par présence confirmée',
-                  suffixText: 'F CFA',
-                ),
-              ),
+
               const SizedBox(height: 16),
               const Text(
                 'Terrains autorisés',
@@ -207,8 +198,6 @@ class ControllersScreen extends GetView<ControllersController> {
                       lastName: lastNameCtrl.text.trim(),
                       phone: phoneCtrl.text.trim(),
                       terrainIds: selectedTerrains.toList(),
-                      commissionPerCheckIn:
-                          int.tryParse(commissionCtrl.text.trim()) ?? 0,
                     );
                     if (credentials == null) return;
                     Get.back();
@@ -298,7 +287,7 @@ class _ControllerCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          item.fullName.isEmpty ? 'Controller' : item.fullName,
+                          item.fullName.isEmpty ? 'Contrôleur' : item.fullName,
                           style: const TextStyle(
                             color: kTextPrim,
                             fontSize: 15,
@@ -330,10 +319,6 @@ class _ControllerCard extends StatelessWidget {
                   _StatPill(
                     label: 'Créneaux bloqués',
                     value: '${item.blockedSlots}',
-                  ),
-                  _StatPill(
-                    label: 'Gain jour',
-                    value: _formatAmount(item.amountEarned),
                   ),
                 ],
               ),

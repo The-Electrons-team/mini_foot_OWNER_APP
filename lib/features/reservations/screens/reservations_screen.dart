@@ -21,8 +21,8 @@ class ReservationsScreen extends GetView<ReservationsController> {
         elevation: 0,
         leading: IconButton(
           onPressed: Get.back,
-          icon: Icon(
-            PhosphorIcons.arrowLeft(PhosphorIconsStyle.duotone),
+          icon: const Icon(
+            Icons.arrow_back_ios_new_rounded,
             size: 18,
           ),
           color: kTextPrim,

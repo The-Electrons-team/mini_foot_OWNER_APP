@@ -242,7 +242,7 @@ class AuthService {
 
   Future<Map<String, dynamic>> getProfile(String token) async {
     final response = await http.get(
-      Uri.parse('$_baseUrl/users/me'),
+      Uri.parse('$_baseUrl/users/me?t=${DateTime.now().millisecondsSinceEpoch}'),
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer $token',

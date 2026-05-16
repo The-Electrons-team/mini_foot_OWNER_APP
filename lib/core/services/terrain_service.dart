@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -48,10 +49,19 @@ class TerrainService {
     final uri = Uri.tryParse(value);
     if (uri == null || uri.pathSegments.length < 2) return value;
 
+    final terrainBucketIndex = uri.pathSegments.indexWhere(
+      (segment) => segment == 'terrains' || segment == 'minifoot-terrains',
+    );
+    if (terrainBucketIndex >= 0 &&
+        terrainBucketIndex + 1 < uri.pathSegments.length) {
+      final key = uri.pathSegments.skip(terrainBucketIndex + 1).join('/');
+      return '$_base/storage/terrains/$key';
+    }
+
+    final bucket = uri.pathSegments.first;
     final isLocalMinio =
         (uri.host == 'localhost' || uri.host == '127.0.0.1') &&
         uri.port == 9000;
-    final bucket = uri.pathSegments.first;
     if (!isLocalMinio || bucket != 'minifoot-terrains') return value;
 
     final key = uri.pathSegments.skip(1).join('/');
@@ -179,17 +189,48 @@ class TerrainService {
       final filename =
           'terrain-${DateTime.now().microsecondsSinceEpoch}-$index$extension';
       request.files.add(
-        http.MultipartFile.fromBytes('files', bytes, filename: filename),
+        http.MultipartFile.fromBytes(
+          'files',
+          bytes,
+          filename: filename,
+          contentType: _mediaTypeFromExtension(extension),
+        ),
       );
     }
     final response = await request.send();
     if (response.statusCode != 200 && response.statusCode != 201) {
-      throw Exception('Erreur upload images');
+      final body = await response.stream.bytesToString();
+      throw Exception('Erreur upload images: $body');
     }
   }
 
   String _extensionFromName(String name) {
     final match = RegExp(r'\.[a-zA-Z0-9]{2,5}$').firstMatch(name);
     return match?.group(0)?.toLowerCase() ?? '.jpg';
+  }
+
+  MediaType _mediaTypeFromExtension(String extension) {
+    switch (extension.toLowerCase()) {
+      case '.png':
+        return MediaType('image', 'png');
+      case '.webp':
+        return MediaType('image', 'webp');
+      case '.jpg':
+      case '.jpeg':
+      default:
+        return MediaType('image', 'jpeg');
+    }
+  }
+
+  // ── GET /terrains/:id/reviews ──────────────────────────────────────────────
+  Future<List<dynamic>> getReviews(String terrainId) async {
+    final response = await http.get(
+      Uri.parse('$_base/terrains/$terrainId/reviews'),
+      headers: await _headers(),
+    );
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as List<dynamic>;
+    }
+    throw Exception('Erreur chargement avis: ${response.body}');
   }
 }

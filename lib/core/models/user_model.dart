@@ -47,10 +47,10 @@ class UserModel {
       lastName: json['lastName'] ?? '',
       birthDate: json['birthDate'],
       avatarUrl: json['avatarUrl'],
-      cniNumber: json['cniNumber'],
-      cniFrontUrl: json['cniFrontUrl'],
-      cniBackUrl: json['cniBackUrl'],
-      ownerStatus: json['ownerStatus']?.toString(),
+      cniNumber: json['cniNumber'] ?? json['cni_number'],
+      cniFrontUrl: json['cniFrontUrl'] ?? json['cni_front_url'],
+      cniBackUrl: json['cniBackUrl'] ?? json['cni_back_url'],
+      ownerStatus: (json['ownerStatus'] ?? json['owner_status'])?.toString(),
       ownerRejectionReason: json['ownerRejectionReason'],
       createdAt: json['createdAt'],
       position: json['position'],
@@ -58,7 +58,7 @@ class UserModel {
       payoutOrangePhone: json['payoutOrangePhone'],
       payoutFreePhone: json['payoutFreePhone'],
       preferredPayoutMethod: json['preferredPayoutMethod'],
-      role: json['role']?.toString() ?? '',
+      role: (json['role'] ?? json['role_name'] ?? '').toString().trim(),
     );
   }
 
@@ -88,7 +88,10 @@ class UserModel {
   bool get isController => role == 'CONTROLLER';
   bool get isOwner => role == 'OWNER';
   bool get canUseOwnerApp => isOwner || isController;
-  bool get isOwnerApproved => !isOwner || ownerStatus == 'APPROVED';
+  bool get isOwnerApproved =>
+      !isOwner ||
+      ownerStatus?.toUpperCase() == 'APPROVED' ||
+      ownerStatus?.toUpperCase() == 'NOT_REQUIRED';
   bool get isOwnerPending => isOwner && ownerStatus == 'PENDING';
   bool get isOwnerRejected => isOwner && ownerStatus == 'REJECTED';
 }

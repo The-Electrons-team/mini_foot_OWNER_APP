@@ -100,10 +100,10 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
           // Bouton retour
           IconButton(
             onPressed: Get.back,
-            icon: Icon(
-              PhosphorIcons.arrowLeft(PhosphorIconsStyle.duotone),
+            icon: const Icon(
+              Icons.arrow_back_ios_new_rounded,
               color: kTextPrim,
-              size: 22,
+              size: 18,
             ),
           ),
           // Titre

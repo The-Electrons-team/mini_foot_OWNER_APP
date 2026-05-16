@@ -185,6 +185,7 @@ class TerrainListScreen extends GetView<TerrainController> {
                       padding: const EdgeInsets.only(bottom: 16),
                       child:
                           _TerrainCard(
+                            onTap: () => controller.goToDetail(terrain),
                             terrain: terrain,
                             onToggle: () => controller.toggleStatus(terrain.id),
                             onEdit: () => controller.goToForm(terrain),
@@ -421,12 +422,14 @@ class _FilterChip extends StatelessWidget {
 
 class _TerrainCard extends StatelessWidget {
   final TerrainModel terrain;
+  final VoidCallback onTap;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
   const _TerrainCard({
     required this.terrain,
+    required this.onTap,
     required this.onToggle,
     required this.onEdit,
     required this.onDelete,
@@ -451,7 +454,7 @@ class _TerrainCard extends StatelessWidget {
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
-          onTap: onEdit,
+          onTap: onTap,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -464,8 +467,12 @@ class _TerrainCard extends StatelessWidget {
                         ? Image.network(
                             terrain.displayImage,
                             fit: BoxFit.cover,
-                            errorBuilder: (context, error, stackTrace) =>
-                                const _TerrainImageFallback(),
+                            errorBuilder: (context, error, stackTrace) {
+                              debugPrint(
+                                'Erreur image terrain: ${terrain.displayImage} -> $error',
+                              );
+                              return const _TerrainImageFallback();
+                            },
                           )
                         : const _TerrainImageFallback(),
                     DecoratedBox(

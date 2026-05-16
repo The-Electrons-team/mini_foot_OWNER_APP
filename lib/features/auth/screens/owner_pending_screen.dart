@@ -186,6 +186,11 @@ class _OwnerPendingScreenState extends State<OwnerPendingScreen> {
             color: kTextPrim,
           ),
         ),
+        IconButton(
+          onPressed: controller.checkAuthStatus,
+          icon: const Icon(Icons.refresh_rounded, color: kGreen),
+          tooltip: 'Actualiser mon statut',
+        ),
         const SizedBox(height: 10),
         const Text(
           'Vos pièces justificatives sont manquantes ou ont échoué à l’envoi. Complétez-les pour activer la vérification de votre compte.',
@@ -328,6 +333,11 @@ class _OwnerPendingScreenState extends State<OwnerPendingScreen> {
             color: kTextPrim,
             height: 1.25,
           ),
+        ),
+        IconButton(
+          onPressed: controller.checkAuthStatus,
+          icon: const Icon(Icons.refresh_rounded, color: kGreen),
+          tooltip: 'Actualiser mon statut',
         ),
         const SizedBox(height: 12),
         Text(
