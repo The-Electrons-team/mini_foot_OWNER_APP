@@ -14,6 +14,7 @@ class SubTerrainModel {
   final String type;
   final String? surface;
   final int? pricePerHour;
+  final List<PricingPeriodModel> pricingPeriods;
   final bool isActive;
 
   const SubTerrainModel({
@@ -27,6 +28,7 @@ class SubTerrainModel {
     required this.type,
     this.surface,
     this.pricePerHour,
+    this.pricingPeriods = const [],
     this.isActive = true,
   });
 
@@ -42,6 +44,10 @@ class SubTerrainModel {
       type: json['type'] ?? '5v5',
       surface: json['surface'],
       pricePerHour: json['pricePerHour'] as int?,
+      pricingPeriods: (json['pricingPeriods'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(PricingPeriodModel.fromJson)
+          .toList(),
       isActive: json['isActive'] ?? true,
     );
   }
@@ -59,7 +65,45 @@ class SubTerrainModel {
     'type': type,
     if (surface != null && surface!.isNotEmpty) 'surface': surface,
     if (pricePerHour != null && pricePerHour! > 0) 'pricePerHour': pricePerHour,
+    'pricingPeriods': pricingPeriods.map((period) => period.toJson()).toList(),
     'isActive': isActive,
+  };
+}
+
+class PricingPeriodModel {
+  final String label;
+  final String startTime;
+  final String endTime;
+  final int pricePerHour;
+  final List<int> days;
+
+  const PricingPeriodModel({
+    required this.label,
+    required this.startTime,
+    required this.endTime,
+    required this.pricePerHour,
+    this.days = const [],
+  });
+
+  factory PricingPeriodModel.fromJson(Map<String, dynamic> json) {
+    return PricingPeriodModel(
+      label: json['label']?.toString() ?? '',
+      startTime: json['startTime']?.toString() ?? '08:00',
+      endTime: json['endTime']?.toString() ?? '18:00',
+      pricePerHour: (json['pricePerHour'] as num?)?.toInt() ?? 0,
+      days: (json['days'] as List<dynamic>? ?? [])
+          .whereType<num>()
+          .map((day) => day.toInt())
+          .toList(),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'label': label,
+    'startTime': startTime,
+    'endTime': endTime,
+    'pricePerHour': pricePerHour,
+    if (days.isNotEmpty) 'days': days,
   };
 }
 
@@ -137,20 +181,38 @@ class TerrainModel {
 
   int get miniTerrainCount => subTerrains.length;
 
+  int get physicalTerrainCount {
+    if (subTerrains.isEmpty) return 1;
+    return subTerrains
+        .map(
+          (subTerrain) =>
+              subTerrain.divisionGroup ??
+              subTerrain.physicalName ??
+              subTerrain.name,
+        )
+        .toSet()
+        .length;
+  }
+
   int get activeMiniTerrainCount =>
       subTerrains.where((subTerrain) => subTerrain.isActive).length;
 
-  String get parcelleStatusLabel {
+  String get complexeStatusLabel {
     if (!isActive) return 'En pause';
-    if (subTerrains.isEmpty) return 'Terrain simple';
-    if (activeMiniTerrainCount == subTerrains.length) return 'Parcelle active';
-    if (activeMiniTerrainCount == 0) return 'Mini-terrains en pause';
+    if (subTerrains.isEmpty) return 'Complexe simple';
+    if (activeMiniTerrainCount == subTerrains.length) return 'Complexe actif';
+    if (activeMiniTerrainCount == 0) return 'Découpes en pause';
     return 'Partiellement active';
   }
 
-  String get miniTerrainLabel {
+  String get physicalTerrainLabel {
+    final count = physicalTerrainCount;
+    return '$count terrain${count > 1 ? 's' : ''}';
+  }
+
+  String get reservableUnitLabel {
     if (subTerrains.isEmpty) return '1 terrain';
-    return '$miniTerrainCount mini-terrain${miniTerrainCount > 1 ? 's' : ''}';
+    return '$miniTerrainCount option${miniTerrainCount > 1 ? 's' : ''}';
   }
 
   String get displayPriceRange {
@@ -243,9 +305,9 @@ class TerrainController extends GetxController {
   int get totalTerrains => allTerrains.length;
   int get activeTerrains => allTerrains.where((t) => t.isActive).length;
   int get inactiveTerrains => allTerrains.where((t) => !t.isActive).length;
-  int get totalMiniTerrains => allTerrains.fold<int>(
+  int get totalPhysicalTerrains => allTerrains.fold<int>(
     0,
-    (sum, terrain) => sum + terrain.miniTerrainCount,
+    (sum, terrain) => sum + terrain.physicalTerrainCount,
   );
 
   Future<void> toggleStatus(String id) async {

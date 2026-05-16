@@ -2,8 +2,6 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter_map/flutter_map.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:get/get.dart';
 import 'package:dotted_border/dotted_border.dart';
@@ -23,20 +21,77 @@ class TerrainFormScreen extends StatefulWidget {
   State<TerrainFormScreen> createState() => _TerrainFormScreenState();
 }
 
+class _PricingPeriodDraft {
+  final TextEditingController labelCtrl;
+  final TextEditingController startCtrl;
+  final TextEditingController endCtrl;
+  final TextEditingController priceCtrl;
+  final RxSet<int> days;
+
+  _PricingPeriodDraft({
+    required String label,
+    required String startTime,
+    required String endTime,
+    required int pricePerHour,
+    List<int> days = const [],
+  }) : labelCtrl = TextEditingController(text: label),
+       startCtrl = TextEditingController(text: startTime),
+       endCtrl = TextEditingController(text: endTime),
+       priceCtrl = TextEditingController(text: '$pricePerHour'),
+       days = days.toSet().obs;
+
+  factory _PricingPeriodDraft.fromModel(PricingPeriodModel model) {
+    return _PricingPeriodDraft(
+      label: model.label,
+      startTime: model.startTime,
+      endTime: model.endTime,
+      pricePerHour: model.pricePerHour,
+      days: model.days,
+    );
+  }
+
+  PricingPeriodModel? toModel({double ratio = 1}) {
+    final label = labelCtrl.text.trim();
+    final start = startCtrl.text.trim();
+    final end = endCtrl.text.trim();
+    final price = int.tryParse(priceCtrl.text.trim());
+    if (label.isEmpty || price == null || price <= 0) return null;
+    if (!_isValidTime(start) || !_isValidTime(end)) return null;
+    if (_timeToMinutes(end) <= _timeToMinutes(start)) return null;
+    return PricingPeriodModel(
+      label: label,
+      startTime: start,
+      endTime: end,
+      pricePerHour: (price * ratio).ceil(),
+      days: days.toList()..sort(),
+    );
+  }
+
+  void dispose() {
+    labelCtrl.dispose();
+    startCtrl.dispose();
+    endCtrl.dispose();
+    priceCtrl.dispose();
+  }
+}
+
 class _SubTerrainDraft {
   final String? divisionGroup;
+  final Map<String, String> idsByDivision;
   final TextEditingController nameCtrl;
   final TextEditingController capacityCtrl;
   final TextEditingController priceCtrl;
-  final RxString type;
+  final RxSet<String> formats;
   final RxString surface;
   final RxBool isActive;
   final RxBool allowFull;
   final RxBool allowHalf;
   final RxBool allowThird;
+  final RxList<_PricingPeriodDraft> pricingPeriods;
 
   _SubTerrainDraft({
     this.divisionGroup,
+    Map<String, String>? idsByDivision,
     required String name,
     int capacity = 10,
     String type = '5v5',
@@ -46,17 +101,28 @@ class _SubTerrainDraft {
     bool allowFull = true,
     bool allowHalf = false,
     bool allowThird = false,
-  }) : nameCtrl = TextEditingController(text: name),
+    List<PricingPeriodModel> pricingPeriods = const [],
+  }) : idsByDivision = idsByDivision ?? const {},
+       nameCtrl = TextEditingController(text: name),
        capacityCtrl = TextEditingController(text: '$capacity'),
        priceCtrl = TextEditingController(
          text: pricePerHour == null ? '' : '$pricePerHour',
        ),
-       type = type.obs,
+       formats = type
+           .split(',')
+           .map((value) => value.trim())
+           .where((value) => value.isNotEmpty)
+           .toSet()
+           .obs,
        surface = surface.obs,
        isActive = isActive.obs,
        allowFull = allowFull.obs,
        allowHalf = allowHalf.obs,
-       allowThird = allowThird.obs;
+       allowThird = allowThird.obs,
+       pricingPeriods = pricingPeriods
+           .map(_PricingPeriodDraft.fromModel)
+           .toList()
+           .obs;
 
   factory _SubTerrainDraft.fromModels(List<SubTerrainModel> models) {
     final first = models.first;
@@ -68,15 +134,37 @@ class _SubTerrainDraft {
         break;
       }
     }
+    SubTerrainModel? halfModel;
+    SubTerrainModel? thirdModel;
+    for (final model in models) {
+      if (model.divisionType == 'HALF') halfModel ??= model;
+      if (model.divisionType == 'THIRD') thirdModel ??= model;
+    }
     final half = models.any((m) => m.divisionType == 'HALF');
     final third = models.any((m) => m.divisionType == 'THIRD');
+    int? inferredFullPrice = full?.pricePerHour;
+    if (inferredFullPrice == null && halfModel?.pricePerHour != null) {
+      inferredFullPrice = halfModel!.pricePerHour! * 2;
+    }
+    if (inferredFullPrice == null && thirdModel?.pricePerHour != null) {
+      inferredFullPrice = thirdModel!.pricePerHour! * 3;
+    }
+    inferredFullPrice ??= first.pricePerHour;
+    final idsByDivision = <String, String>{};
+    for (final model in models) {
+      if (model.id == null || model.id!.isEmpty) continue;
+      idsByDivision['${model.divisionType}:${model.divisionIndex}'] =
+          model.id!;
+    }
     return _SubTerrainDraft(
       divisionGroup: first.divisionGroup ?? first.id,
+      idsByDivision: idsByDivision,
       name: physicalName,
       capacity: first.capacity,
       type: first.type,
       surface: first.surface ?? 'Gazon synthétique',
-      pricePerHour: full?.pricePerHour ?? first.pricePerHour,
+      pricePerHour: inferredFullPrice,
+      pricingPeriods: full?.pricingPeriods ?? first.pricingPeriods,
       isActive: models.any((m) => m.isActive),
       allowFull: full != null || (!half && !third),
       allowHalf: half,
@@ -84,60 +172,103 @@ class _SubTerrainDraft {
     );
   }
 
-  List<SubTerrainModel>? toModels(int index) {
+  List<SubTerrainModel>? toModels(int index, int defaultPricePerHour) {
     final name = nameCtrl.text.trim();
     final capacity = int.tryParse(capacityCtrl.text.trim());
+    final selectedFormats = _TerrainFormScreenState._miniTerrainTypes
+        .where(formats.contains)
+        .toList();
     final priceText = priceCtrl.text.trim();
     final customPrice = priceText.isEmpty ? null : int.tryParse(priceText);
     if (name.isEmpty || capacity == null || capacity <= 0) return null;
+    if (selectedFormats.isEmpty) return null;
+    if (customPrice != null && customPrice <= 0) return null;
     if (!allowFull.value && !allowHalf.value && !allowThird.value) return null;
+    if (pricingPeriods.any((period) => period.toModel() == null)) return null;
     final group =
         divisionGroup ??
         'terrain_${index + 1}_${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '_')}';
+
+    List<PricingPeriodModel> scaledPricingPeriods(double ratio) {
+      return pricingPeriods
+          .map((period) => period.toModel(ratio: ratio))
+          .whereType<PricingPeriodModel>()
+          .toList();
+    }
 
     SubTerrainModel unit(
       String label,
       String divisionType,
       int divisionIndex,
       int? price,
+      double priceRatio,
     ) {
       return SubTerrainModel(
+        id: idsByDivision['$divisionType:$divisionIndex'],
         name: '$name - $label',
         physicalName: name,
         divisionGroup: group,
         divisionType: divisionType,
         divisionIndex: divisionIndex,
         capacity: capacity,
-        type: type.value,
+        type: selectedFormats.join(', '),
         surface: surface.value,
         pricePerHour: price,
+        pricingPeriods: scaledPricingPeriods(priceRatio),
         isActive: isActive.value,
       );
     }
 
     final units = <SubTerrainModel>[];
-    if (allowFull.value) units.add(unit('Entier', 'FULL', 0, customPrice));
+    if (allowFull.value) units.add(unit('Entier', 'FULL', 0, customPrice, 1));
     if (allowHalf.value) {
-      final price = customPrice == null ? null : (customPrice / 2).ceil();
+      final price = ((customPrice ?? defaultPricePerHour) / 2).ceil();
       units
-        ..add(unit('Demi 1', 'HALF', 1, price))
-        ..add(unit('Demi 2', 'HALF', 2, price));
+        ..add(unit('Demi 1', 'HALF', 1, price, 0.5))
+        ..add(unit('Demi 2', 'HALF', 2, price, 0.5));
     }
     if (allowThird.value) {
-      final price = customPrice == null ? null : (customPrice / 3).ceil();
+      final price = ((customPrice ?? defaultPricePerHour) / 3).ceil();
       units
-        ..add(unit('Tiers 1', 'THIRD', 1, price))
-        ..add(unit('Tiers 2', 'THIRD', 2, price))
-        ..add(unit('Tiers 3', 'THIRD', 3, price));
+        ..add(unit('Tiers 1', 'THIRD', 1, price, 1 / 3))
+        ..add(unit('Tiers 2', 'THIRD', 2, price, 1 / 3))
+        ..add(unit('Tiers 3', 'THIRD', 3, price, 1 / 3));
     }
     return units;
+  }
+
+  void addPricingPeriod() {
+    pricingPeriods.add(
+      _PricingPeriodDraft(
+        label: 'Soirée',
+        startTime: '18:00',
+        endTime: '23:00',
+        pricePerHour: int.tryParse(priceCtrl.text.trim()) ?? 0,
+      ),
+    );
+  }
+
+  void removePricingPeriod(_PricingPeriodDraft period) {
+    period.dispose();
+    pricingPeriods.remove(period);
   }
 
   void dispose() {
     nameCtrl.dispose();
     capacityCtrl.dispose();
     priceCtrl.dispose();
+    for (final period in pricingPeriods) {
+      period.dispose();
+    }
   }
+}
+
+bool _isValidTime(String value) => RegExp(r'^\d{2}:\d{2}$').hasMatch(value);
+
+int _timeToMinutes(String value) {
+  final parts = value.split(':');
+  if (parts.length != 2) return -1;
+  return (int.tryParse(parts[0]) ?? 0) * 60 + (int.tryParse(parts[1]) ?? 0);
 }
 
 String _stripDivisionLabel(String value) {
@@ -153,22 +284,20 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
   final _nameCtrl = TextEditingController();
   final _addressCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  final _priceCtrl = TextEditingController();
+  final _priceCtrl = TextEditingController(text: '10000');
   final _dimCtrl = TextEditingController(text: '40 x 25 m');
   final _openCtrl = TextEditingController(text: '08:00');
   final _closeCtrl = TextEditingController(text: '23:00');
-  final _searchCtrl = TextEditingController();
 
   final _images = <XFile>[].obs;
   final _surface = 'Gazon synthétique'.obs;
   final _zone = 'DAKAR'.obs;
   final _capacities = <String>{}.obs;
   final _mapCenter = Rx<LatLng>(const LatLng(14.6937, -17.4441));
-  final _mapCtrl = MapController();
-  final _searchResults = <Map<String, dynamic>>[].obs;
-  final _isSearching = false.obs;
   final _isLocating = false.obs;
   final _isSaving = false.obs;
+  final _step = 0.obs;
+  final _editingTerrainIndex = RxnInt();
   final _miniTerrains = <_SubTerrainDraft>[].obs;
 
   final _equipments = <String, bool>{
@@ -180,6 +309,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     'Buvette': false,
     'Douches': false,
     'Arbitre': false,
+    'Ballon': false,
   }.obs;
 
   static const _surfaces = [
@@ -189,8 +319,15 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
   ];
   static const _allCapacities = ['5v5', '7v7', '11v11'];
   static const _miniTerrainTypes = ['5v5', '7v7', '9v9', '11v11'];
-
-  String get _mapboxToken => dotenv.env['MAPBOX_ACCESS_TOKEN']?.trim() ?? '';
+  static const _dayLabels = {
+    1: 'Lun',
+    2: 'Mar',
+    3: 'Mer',
+    4: 'Jeu',
+    5: 'Ven',
+    6: 'Sam',
+    0: 'Dim',
+  };
 
   @override
   void initState() {
@@ -241,11 +378,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
           .toList();
     }
 
-    if (_miniTerrains.isEmpty) {
-      _miniTerrains.add(
-        _SubTerrainDraft(name: 'Terrain A', capacity: 10, type: '5v5'),
-      );
-    }
+    if (_miniTerrains.isNotEmpty) _editingTerrainIndex.value = 0;
   }
 
   @override
@@ -257,43 +390,10 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     _dimCtrl.dispose();
     _openCtrl.dispose();
     _closeCtrl.dispose();
-    _searchCtrl.dispose();
     for (final miniTerrain in _miniTerrains) {
       miniTerrain.dispose();
     }
     super.dispose();
-  }
-
-  // ── Recherche Nominatim ────────────────────────────────────────────────────
-  Future<void> _searchAddress(String query) async {
-    if (query.trim().length < 3) {
-      _searchResults.clear();
-      return;
-    }
-    _isSearching.value = true;
-    try {
-      final uri = Uri.parse(
-        'https://nominatim.openstreetmap.org/search'
-        '?q=${Uri.encodeComponent(query)}&format=json&limit=5&countrycodes=sn',
-      );
-      final res = await http.get(uri, headers: {'Accept-Language': 'fr'});
-      if (res.statusCode == 200) {
-        final data = jsonDecode(res.body) as List;
-        _searchResults.value = data.cast<Map<String, dynamic>>();
-      }
-    } catch (_) {}
-    _isSearching.value = false;
-  }
-
-  void _selectResult(Map<String, dynamic> r) {
-    final lat = double.tryParse(r['lat'] ?? '') ?? 14.6937;
-    final lng = double.tryParse(r['lon'] ?? '') ?? -17.4441;
-    final pt = LatLng(lat, lng);
-    _mapCenter.value = pt;
-    _mapCtrl.move(pt, 15);
-    _addressCtrl.text = r['display_name'] ?? '';
-    _searchCtrl.clear();
-    _searchResults.clear();
   }
 
   Future<void> _reverseGeocode(LatLng point) async {
@@ -359,10 +459,10 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
       );
       final pt = LatLng(pos.latitude, pos.longitude);
       _mapCenter.value = pt;
-      _mapCtrl.move(pt, 16);
-      _addressCtrl.text = 'Votre position';
-      _searchCtrl.text = 'Votre position';
-      _searchResults.clear();
+      await _reverseGeocode(pt);
+      if (_addressCtrl.text.trim().isEmpty) {
+        _addressCtrl.text = 'Position actuelle détectée';
+      }
     } catch (e) {
       Get.snackbar(
         'Erreur',
@@ -408,7 +508,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
             ),
             centerTitle: true,
             title: Text(
-              _isEditing ? 'Modifier Parcelle' : 'Nouvelle Parcelle',
+              _isEditing ? 'Modifier complexe' : 'Nouveau complexe',
               style: const TextStyle(
                 fontFamily: 'Orbitron',
                 fontSize: 16,
@@ -419,66 +519,278 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
           ),
         ),
       ),
-      body: Stack(
-        children: [
-          SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 20, 20, 100),
-            physics: const BouncingScrollPhysics(),
-            child: Column(
-              children: [
-                _buildPhotosSection().animate().fadeIn(duration: 350.ms),
-                const SizedBox(height: 20),
-                _buildInfoSection().animate().fadeIn(
-                  duration: 350.ms,
-                  delay: 50.ms,
-                ),
-                const SizedBox(height: 20),
-                _buildMiniTerrainsSection().animate().fadeIn(
-                  duration: 350.ms,
-                  delay: 100.ms,
-                ),
-                const SizedBox(height: 20),
-                _buildCapacitySection().animate().fadeIn(
-                  duration: 350.ms,
-                  delay: 150.ms,
-                ),
-                const SizedBox(height: 20),
-                _buildEquipmentsSection().animate().fadeIn(
-                  duration: 350.ms,
-                  delay: 200.ms,
-                ),
-                const SizedBox(height: 20),
-                _buildLocationSection().animate().fadeIn(
-                  duration: 350.ms,
-                  delay: 250.ms,
-                ),
-                const SizedBox(height: 20),
-              ],
-            ),
-          ),
-          // Bouton Fixe en bas
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Container(
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                border: const Border(top: BorderSide(color: Color(0xFFF0EBE3))),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.05),
-                    blurRadius: 10,
-                    offset: const Offset(0, -5),
+      body: Obx(
+        () => Stack(
+          children: [
+            SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 108),
+              physics: const BouncingScrollPhysics(),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildStepHeader(),
+                  const SizedBox(height: 16),
+                  AnimatedSwitcher(
+                    duration: 220.ms,
+                    child: KeyedSubtree(
+                      key: ValueKey(_step.value),
+                      child: _buildCurrentStep(),
+                    ),
                   ),
                 ],
               ),
-              child: _buildSaveButton(),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  border: const Border(
+                    top: BorderSide(color: Color(0xFFF0EBE3)),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, -5),
+                    ),
+                  ],
+                ),
+                child: _buildBottomBar(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepHeader() {
+    final current = _step.value + 1;
+    final titles = [
+      'Infos',
+      'Photos',
+      'Terrains',
+      'Terrain',
+      'Résumé',
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Étape $current sur 5',
+          style: const TextStyle(
+            color: Color(0xFF6B7280),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: List.generate(5, (index) {
+            final active = index <= _step.value;
+            return Expanded(
+              child: Container(
+                height: 5,
+                margin: EdgeInsets.only(right: index == 4 ? 0 : 6),
+                decoration: BoxDecoration(
+                  color: active
+                      ? const Color(0xFF006F39)
+                      : const Color(0xFFE5E0D8),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 10),
+        Text(
+          titles[_step.value],
+          style: const TextStyle(
+            color: Color(0xFF1A1A1A),
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCurrentStep() {
+    switch (_step.value) {
+      case 0:
+        return Column(
+          children: [
+            _buildInfoSection(),
+            const SizedBox(height: 16),
+            _buildLocationSection(),
+          ],
+        );
+      case 1:
+        return Column(
+          children: [
+            _buildPhotosSection(),
+            const SizedBox(height: 16),
+            _buildEquipmentsSection(),
+          ],
+        );
+      case 2:
+        return _buildTerrainListStep();
+      case 3:
+        return _buildTerrainEditorStep();
+      default:
+        return _buildReviewStep();
+    }
+  }
+
+  Widget _buildTerrainListStep() {
+    return _Card(
+      title: 'Terrains du complexe',
+      icon: PhosphorIconsLight.soccerBall,
+      trailing: _IconPillButton(
+        icon: PhosphorIconsLight.plus,
+        label: 'Ajouter',
+        onTap: _addMiniTerrain,
+      ),
+      child: Obx(() {
+        if (_miniTerrains.isEmpty) {
+          return Column(
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF9FAF7),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFE5E0D8)),
+                ),
+                child: const Text(
+                  'Aucun terrain ajouté pour le moment.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Color(0xFF6B7280), fontSize: 13),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _addMiniTerrain,
+                  icon: const Icon(PhosphorIconsLight.plus, size: 18),
+                  label: const Text('Ajouter un terrain'),
+                ),
+              ),
+            ],
+          );
+        }
+
+        return Column(
+          children: List.generate(_miniTerrains.length, (index) {
+            final terrain = _miniTerrains[index];
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: index == _miniTerrains.length - 1 ? 0 : 10,
+              ),
+              child: _TerrainDraftTile(
+                index: index,
+                terrain: terrain,
+                onEdit: () {
+                  _editingTerrainIndex.value = index;
+                  _step.value = 3;
+                },
+                onDelete: _miniTerrains.length <= 1
+                    ? null
+                    : () => _removeMiniTerrain(terrain),
+              ),
+            );
+          }),
+        );
+      }),
+    );
+  }
+
+  Widget _buildTerrainEditorStep() {
+    return Obx(() {
+      if (_miniTerrains.isEmpty) {
+        return _Card(
+          title: 'Terrain',
+          icon: PhosphorIconsLight.soccerBall,
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _addMiniTerrain,
+              icon: const Icon(PhosphorIconsLight.plus, size: 18),
+              label: const Text('Ajouter un terrain'),
             ),
           ),
-        ],
-      ),
+        );
+      }
+
+      final index = (_editingTerrainIndex.value ?? 0)
+          .clamp(
+        0,
+        _miniTerrains.length - 1,
+      )
+          .toInt();
+      final terrain = _miniTerrains[index];
+      return _buildMiniTerrainCard(terrain, index);
+    });
+  }
+
+  Widget _buildReviewStep() {
+    final equipments = _equipments.entries
+        .where((entry) => entry.value)
+        .map((entry) => entry.key)
+        .toList();
+
+    return Column(
+      children: [
+        _Card(
+          title: 'Complexe',
+          icon: PhosphorIconsLight.buildings,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _ReviewLine(label: 'Nom', value: _nameCtrl.text.trim()),
+              _ReviewLine(label: 'Zone', value: ownerZoneLabels[_zone.value] ?? _zone.value),
+              _ReviewLine(label: 'Adresse', value: _addressCtrl.text.trim()),
+              _ReviewLine(label: 'Photos', value: '${_images.length} ajoutée(s)'),
+              _ReviewLine(
+                label: 'Équipements',
+                value: equipments.isEmpty ? 'Aucun' : equipments.join(', '),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+        _Card(
+          title: 'Terrains',
+          icon: PhosphorIconsLight.soccerBall,
+          child: Obx(
+            () => Column(
+              children: List.generate(_miniTerrains.length, (index) {
+                final terrain = _miniTerrains[index];
+                return Padding(
+                  padding: EdgeInsets.only(
+                    bottom: index == _miniTerrains.length - 1 ? 0 : 10,
+                  ),
+                  child: _TerrainDraftTile(
+                    index: index,
+                    terrain: terrain,
+                    onEdit: () {
+                      _editingTerrainIndex.value = index;
+                      _step.value = 3;
+                    },
+                  ),
+                );
+              }),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -527,7 +839,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
                 const SizedBox(width: 10),
                 const Expanded(
                   child: Text(
-                    'Photos du terrain',
+                    'Photos du complexe',
                     style: TextStyle(
                       color: Color(0xFF1A1A1A),
                       fontSize: 14,
@@ -663,12 +975,12 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
 
   // ── 2. Informations ──────────────────────────────────────────────────────
   Widget _buildInfoSection() => _Card(
-    title: 'Informations',
+    title: 'Complexe',
     icon: PhosphorIconsLight.fileText,
     child: Column(
       children: [
         _Field(
-          label: 'Nom de la parcelle *',
+          label: 'Nom du complexe *',
           ctrl: _nameCtrl,
           hint: 'Ex: Complexe Foot Almadies',
           icon: PhosphorIconsLight.pen,
@@ -682,21 +994,11 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
               .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
               .toList(),
         ),
-        const SizedBox(height: 16),
-        // Prix
-        _Field(
-          label: 'Prix par heure (XOF) *',
-          ctrl: _priceCtrl,
-          hint: 'Prix par défaut, ex: 15000',
-          icon: PhosphorIconsLight.currencyDollar,
-          keyboardType: TextInputType.number,
-        ),
-        const SizedBox(height: 16),
         // Description
         _MultilineField(
           label: 'Description',
           ctrl: _descCtrl,
-          hint: 'Décrivez la parcelle et ses espaces…',
+          hint: 'Décrivez le complexe et ses terrains...',
         ),
         const SizedBox(height: 16),
         // Surface
@@ -777,7 +1079,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
   );
 
   Widget _buildMiniTerrainsSection() => _Card(
-    title: 'Terrains du complexe',
+    title: 'Terrains physiques',
     icon: PhosphorIconsLight.soccerBall,
     trailing: _IconPillButton(
       icon: PhosphorIconsLight.plus,
@@ -858,7 +1160,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
           ),
           const SizedBox(height: 12),
           _Field(
-            label: 'Nom du terrain *',
+            label: 'Nom du terrain physique *',
             ctrl: miniTerrain.nameCtrl,
             hint: 'Ex: Terrain A',
             icon: PhosphorIconsLight.pen,
@@ -867,16 +1169,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
           Row(
             children: [
               Expanded(
-                child: _buildDropdown(
-                  label: 'Format',
-                  obs: miniTerrain.type,
-                  items: _miniTerrainTypes
-                      .map(
-                        (type) =>
-                            DropdownMenuItem(value: type, child: Text(type)),
-                      )
-                      .toList(),
-                ),
+                child: _buildFormatsSelector(miniTerrain),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -912,7 +1205,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
                 child: _Field(
                   label: 'Prix perso',
                   ctrl: miniTerrain.priceCtrl,
-                  hint: 'Prix entier',
+                  hint: 'Prix 1h entier',
                   icon: PhosphorIconsLight.currencyDollar,
                   keyboardType: TextInputType.number,
                 ),
@@ -921,7 +1214,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
           ),
           const SizedBox(height: 12),
           const Text(
-            'Options réservables',
+            'Découpes réservables',
             style: TextStyle(
               color: Color(0xFF6B7280),
               fontSize: 12,
@@ -935,13 +1228,13 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
               runSpacing: 8,
               children: [
                 _DivisionChip(
-                  label: 'Entier',
+                  label: 'Full',
                   selected: miniTerrain.allowFull.value,
                   onTap: () => miniTerrain.allowFull.value =
                       !miniTerrain.allowFull.value,
                 ),
                 _DivisionChip(
-                  label: 'Demi',
+                  label: 'Moitié',
                   selected: miniTerrain.allowHalf.value,
                   onTap: () => miniTerrain.allowHalf.value =
                       !miniTerrain.allowHalf.value,
@@ -955,6 +1248,146 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
               ],
             ),
           ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Tarifs par période',
+                  style: TextStyle(
+                    color: Color(0xFF6B7280),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              _IconPillButton(
+                label: 'Ajouter',
+                icon: PhosphorIconsLight.plus,
+                onTap: miniTerrain.addPricingPeriod,
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Obx(() {
+            if (miniTerrain.pricingPeriods.isEmpty) {
+              return const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Sans période spécifique, le prix 1h entier est utilisé.',
+                  style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 11),
+                ),
+              );
+            }
+
+            return Column(
+              children: miniTerrain.pricingPeriods.map((period) {
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: _buildPricingPeriodRow(miniTerrain, period),
+                );
+              }).toList(),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPricingPeriodRow(
+    _SubTerrainDraft miniTerrain,
+    _PricingPeriodDraft period,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E0D8)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _CompactField(
+                  label: 'Nom',
+                  ctrl: period.labelCtrl,
+                  hint: 'Soirée',
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                onPressed: () => miniTerrain.removePricingPeriod(period),
+                icon: const Icon(
+                  PhosphorIconsLight.x,
+                  color: Color(0xFFEF4444),
+                  size: 18,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: _CompactField(
+                  label: 'Début',
+                  ctrl: period.startCtrl,
+                  hint: '18:00',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _CompactField(
+                  label: 'Fin',
+                  ctrl: period.endCtrl,
+                  hint: '23:00',
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _CompactField(
+                  label: 'Prix 1h',
+                  ctrl: period.priceCtrl,
+                  hint: '20000',
+                  keyboardType: TextInputType.number,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Obx(
+            () => Align(
+              alignment: Alignment.centerLeft,
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: _dayLabels.entries.map((entry) {
+                  final selected = period.days.contains(entry.key);
+                  return _DivisionChip(
+                    label: entry.value,
+                    selected: selected,
+                    onTap: () {
+                      if (selected) {
+                        period.days.remove(entry.key);
+                      } else {
+                        period.days.add(entry.key);
+                      }
+                    },
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          const Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Aucun jour sélectionné = tous les jours.',
+              style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 10),
+            ),
+          ),
         ],
       ),
     );
@@ -964,6 +1397,45 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     final name = String.fromCharCode(65 + _miniTerrains.length);
     _miniTerrains.add(
       _SubTerrainDraft(name: 'Terrain $name', capacity: 10, type: '5v5'),
+    );
+    _editingTerrainIndex.value = _miniTerrains.length - 1;
+    _step.value = 3;
+  }
+
+  Widget _buildFormatsSelector(_SubTerrainDraft miniTerrain) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Formats disponibles',
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: Color(0xFF6B7280),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Obx(
+          () => Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: _miniTerrainTypes.map((type) {
+              final selected = miniTerrain.formats.contains(type);
+              return _DivisionChip(
+                label: type,
+                selected: selected,
+                onTap: () {
+                  if (selected && miniTerrain.formats.length > 1) {
+                    miniTerrain.formats.remove(type);
+                  } else if (!selected) {
+                    miniTerrain.formats.add(type);
+                  }
+                },
+              );
+            }).toList(),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1089,107 +1561,45 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
     }),
   );
 
-  // ── 5. Localisation — Map et Recherche ────────────────────────────────────
+  // ── 5. Localisation ───────────────────────────────────────────────────────
   Widget _buildLocationSection() => _Card(
     title: 'Localisation',
     icon: PhosphorIconsLight.mapPin,
     child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: Container(
-                height: 48,
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF0EBE3),
+        SizedBox(
+          width: double.infinity,
+          child: Obx(
+            () => ElevatedButton.icon(
+              onPressed: _isLocating.value ? null : _useCurrentLocation,
+              icon: _isLocating.value
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(PhosphorIconsLight.gps, size: 18),
+              label: Text(
+                _isLocating.value
+                    ? 'Détection en cours...'
+                    : 'Utiliser ma position actuelle',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF006F39),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFE5E0D8)),
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _searchCtrl,
-                        onChanged: _searchAddress,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF1A1A1A),
-                        ),
-                        decoration: const InputDecoration(
-                          hintText: 'Rechercher une adresse...',
-                          hintStyle: TextStyle(
-                            color: Color(0xFF9CA3AF),
-                            fontSize: 13,
-                          ),
-                          border: InputBorder.none,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          contentPadding: EdgeInsets.zero,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                elevation: 0,
               ),
             ),
-            const SizedBox(width: 8),
-            Obx(
-              () => GestureDetector(
-                onTap: _isLocating.value ? null : _useCurrentLocation,
-                child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF006F39),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: _isLocating.value
-                      ? const Padding(
-                          padding: EdgeInsets.all(14),
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(
-                          PhosphorIconsLight.gps,
-                          color: Colors.white,
-                          size: 20,
-                        ),
-                ),
-              ),
-            ),
-          ],
+          ),
         ),
-
-        // Résultats de recherche Nominatim
-        Obx(() {
-          if (_searchResults.isEmpty) return const SizedBox.shrink();
-          return Container(
-            margin: const EdgeInsets.only(top: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE5E0D8)),
-            ),
-            child: Column(
-              children: _searchResults
-                  .map(
-                    (r) => ListTile(
-                      dense: true,
-                      leading: const Icon(PhosphorIconsLight.mapPin, size: 14),
-                      title: Text(
-                        r['display_name'] ?? '',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                      onTap: () => _selectResult(r),
-                    ),
-                  )
-                  .toList(),
-            ),
-          );
-        }),
 
         ValueListenableBuilder<TextEditingValue>(
           valueListenable: _addressCtrl,
@@ -1197,217 +1607,207 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
             final address = value.text.trim();
             if (address.isEmpty) return const SizedBox.shrink();
 
-            return Obx(
-              () => Container(
-                margin: const EdgeInsets.only(top: 10),
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE8F5E9),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: const Color(0xFFCDE8D4)),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 34,
-                      height: 34,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF006F39),
-                        borderRadius: BorderRadius.circular(11),
-                      ),
-                      child: const Icon(
-                        PhosphorIconsLight.mapPin,
-                        color: Colors.white,
-                        size: 17,
+            return Container(
+              margin: const EdgeInsets.only(top: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E9),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: const Color(0xFFCDE8D4)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF006F39),
+                      borderRadius: BorderRadius.circular(11),
+                    ),
+                    child: const Icon(
+                      PhosphorIconsLight.mapPin,
+                      color: Colors.white,
+                      size: 17,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      address,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Color(0xFF1A1A1A),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        height: 1.35,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            address,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              color: Color(0xFF1A1A1A),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${_mapCenter.value.latitude.toStringAsFixed(5)}, ${_mapCenter.value.longitude.toStringAsFixed(5)}',
-                            style: const TextStyle(
-                              color: Color(0xFF006F39),
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             );
           },
-        ),
-
-        const SizedBox(height: 12),
-        // Mini Map
-        ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Container(
-            height: 160,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF0EBE3),
-              border: Border.all(color: const Color(0xFFE5E0D8)),
-            ),
-            child: Stack(
-              children: [
-                Obx(
-                  () => FlutterMap(
-                    mapController: _mapCtrl,
-                    options: MapOptions(
-                      initialCenter: _mapCenter.value,
-                      initialZoom: 15,
-                      onTap: (_, point) {
-                        _mapCenter.value = point;
-                        _reverseGeocode(point);
-                      },
-                      onPositionChanged: (camera, hasGesture) {
-                        if (hasGesture) _mapCenter.value = camera.center;
-                      },
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate: _mapboxToken.isEmpty
-                            ? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-                            : 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=$_mapboxToken',
-                        userAgentPackageName: 'com.minifoot.owner',
-                      ),
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: _mapCenter.value,
-                            width: 80,
-                            height: 80,
-                            child: Center(
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  Container(
-                                        width: 40,
-                                        height: 40,
-                                        decoration: BoxDecoration(
-                                          color: const Color(
-                                            0xFF006F39,
-                                          ).withAlpha(50),
-                                          shape: BoxShape.circle,
-                                        ),
-                                      )
-                                      .animate(onPlay: (c) => c.repeat())
-                                      .scale(
-                                        begin: const Offset(1, 1),
-                                        end: const Offset(2.5, 2.5),
-                                        duration: 1500.ms,
-                                        curve: Curves.easeOut,
-                                      )
-                                      .fadeOut(),
-                                  Container(
-                                    width: 14,
-                                    height: 14,
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF006F39),
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white,
-                                        width: 2.5,
-                                      ),
-                                      boxShadow: const [
-                                        BoxShadow(
-                                          color: Colors.black26,
-                                          blurRadius: 4,
-                                          offset: Offset(0, 2),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                const IgnorePointer(
-                  child: Center(
-                    child: Padding(
-                      padding: EdgeInsets.only(top: 100),
-                      child: Text(
-                        'Glissez la carte pour affiner la position',
-                        style: TextStyle(
-                          color: Color(0xFF9CA3AF),
-                          fontSize: 10,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ],
     ),
   );
 
-  // ── 6. Bouton Enregistrer ────────────────────────────────────────────────
-  Widget _buildSaveButton() => Obx(
-    () => SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: _isSaving.value ? null : _onSave,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF006F39),
-          disabledBackgroundColor: const Color(0xFF006F39).withAlpha(120),
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          elevation: 0,
-        ),
-        child: _isSaving.value
-            ? const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: Colors.white,
+  // ── 6. Navigation ────────────────────────────────────────────────────────
+  Widget _buildBottomBar() => Obx(() {
+    final isLast = _step.value == 4;
+    final isTerrainEditor = _step.value == 3;
+    final canGoBack = _step.value > 0;
+    final label = isLast
+        ? 'Confirmer'
+        : isTerrainEditor
+            ? 'Valider ce terrain'
+            : _step.value == 2 && _miniTerrains.isEmpty
+                ? 'Ajouter un terrain'
+                : _step.value == 2
+                    ? 'Voir le récapitulatif'
+                    : 'Continuer';
+
+    return Row(
+      children: [
+        if (canGoBack) ...[
+          SizedBox(
+            width: 52,
+            height: 52,
+            child: OutlinedButton(
+              onPressed: _isSaving.value ? null : _goPrevious,
+              style: OutlinedButton.styleFrom(
+                padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(PhosphorIconsLight.floppyDisk, size: 20),
-                  SizedBox(width: 10),
-                  Text(
-                    'Enregistrer la parcelle',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ],
               ),
-      ),
-    ),
-  );
+              child: const Icon(PhosphorIconsLight.arrowLeft, size: 20),
+            ),
+          ),
+          const SizedBox(width: 12),
+        ],
+        Expanded(
+          child: ElevatedButton(
+            onPressed: _isSaving.value ? null : _goNext,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF006F39),
+              disabledBackgroundColor: const Color(0xFF006F39).withAlpha(120),
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              elevation: 0,
+            ),
+            child: _isSaving.value
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: Colors.white,
+                    ),
+                  )
+                : Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        isLast
+                            ? PhosphorIconsLight.checkCircle
+                            : PhosphorIconsLight.arrowRight,
+                        size: 20,
+                      ),
+                      const SizedBox(width: 10),
+                      Text(
+                        label,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
+        ),
+      ],
+    );
+  });
+
+  void _goPrevious() {
+    if (_step.value == 3) {
+      _step.value = 2;
+      return;
+    }
+    if (_step.value == 4) {
+      _step.value = 2;
+      return;
+    }
+    if (_step.value > 0) _step.value--;
+  }
+
+  Future<void> _goNext() async {
+    if (_step.value == 0 && !_validateComplexInfo()) return;
+    if (_step.value == 2 && _miniTerrains.isEmpty) {
+      _addMiniTerrain();
+      return;
+    }
+    if (_step.value == 2) {
+      _step.value = 4;
+      return;
+    }
+    if (_step.value == 3) {
+      if (!_validateCurrentTerrain()) return;
+      _step.value = 2;
+      return;
+    }
+    if (_step.value == 4) {
+      await _onSave();
+      return;
+    }
+    _step.value++;
+  }
+
+  bool _validateComplexInfo() {
+    if (_nameCtrl.text.trim().isEmpty) {
+      Get.snackbar(
+        'Champ requis',
+        'Veuillez saisir un nom de complexe',
+        snackPosition: SnackPosition.TOP,
+      );
+      return false;
+    }
+    if (_addressCtrl.text.trim().isEmpty) {
+      Get.snackbar(
+        'Champ requis',
+        'Veuillez sélectionner une adresse ou utiliser la position actuelle',
+        snackPosition: SnackPosition.TOP,
+      );
+      return false;
+    }
+    return true;
+  }
+
+  bool _validateCurrentTerrain() {
+    final index = _editingTerrainIndex.value;
+    if (index == null || index < 0 || index >= _miniTerrains.length) {
+      return false;
+    }
+    final fallbackPrice = int.tryParse(_priceCtrl.text.trim()) ?? 0;
+    if (fallbackPrice <= 0) _priceCtrl.text = '10000';
+    final valid = _miniTerrains[index].toModels(
+      index,
+      int.tryParse(_priceCtrl.text.trim()) ?? 10000,
+    );
+    if (valid == null) {
+      Get.snackbar(
+        'Terrain incomplet',
+        'Vérifiez le nom, les formats, les découpes et les règles tarifaires',
+        snackPosition: SnackPosition.TOP,
+      );
+      return false;
+    }
+    return true;
+  }
 
   Future<void> _onSave() async {
     final name = _nameCtrl.text.trim();
@@ -1432,7 +1832,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
 
     final subTerrainGroups = <List<SubTerrainModel>>[];
     for (var i = 0; i < _miniTerrains.length; i++) {
-      final models = _miniTerrains[i].toModels(i);
+      final models = _miniTerrains[i].toModels(i, price);
       if (models == null) {
         subTerrainGroups.clear();
         break;
@@ -1444,7 +1844,7 @@ class _TerrainFormScreenState extends State<TerrainFormScreen> {
         subTerrainGroups.length != _miniTerrains.length) {
       Get.snackbar(
         'Terrain incomplet',
-        'Chaque terrain doit avoir un nom, une capacité valide et au moins une option réservable',
+        'Chaque terrain physique doit avoir un nom, un format, une capacité valide, des tarifs valides et au moins une découpe réservable',
         snackPosition: SnackPosition.TOP,
       );
       return;
@@ -1719,6 +2119,153 @@ class _PhotoThumb extends StatelessWidget {
   }
 }
 
+class _TerrainDraftTile extends StatelessWidget {
+  final int index;
+  final _SubTerrainDraft terrain;
+  final VoidCallback onEdit;
+  final VoidCallback? onDelete;
+
+  const _TerrainDraftTile({
+    required this.index,
+    required this.terrain,
+    required this.onEdit,
+    this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Obx(() {
+      final formats = terrain.formats.isEmpty
+          ? 'Aucun format'
+          : terrain.formats.join(', ');
+      final cuts = [
+        if (terrain.allowFull.value) 'Full',
+        if (terrain.allowHalf.value) 'Moitié',
+        if (terrain.allowThird.value) 'Tiers',
+      ].join(', ');
+      final price = terrain.priceCtrl.text.trim().isEmpty
+          ? 'Prix par défaut'
+          : '${terrain.priceCtrl.text.trim()} F/h';
+
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAF7),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFE5E0D8)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE8F5E9),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Center(
+                child: Text(
+                  '${index + 1}',
+                  style: const TextStyle(
+                    color: Color(0xFF006F39),
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    terrain.nameCtrl.text.trim().isEmpty
+                        ? 'Terrain ${index + 1}'
+                        : terrain.nameCtrl.text.trim(),
+                    style: const TextStyle(
+                      color: Color(0xFF1A1A1A),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '$formats · ${cuts.isEmpty ? 'Aucune découpe' : cuts} · $price',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Color(0xFF6B7280),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: onEdit,
+              icon: const Icon(
+                PhosphorIconsLight.pencilSimple,
+                color: Color(0xFF006F39),
+                size: 18,
+              ),
+            ),
+            if (onDelete != null)
+              IconButton(
+                onPressed: onDelete,
+                icon: const Icon(
+                  PhosphorIconsLight.trash,
+                  color: Color(0xFFEF4444),
+                  size: 18,
+                ),
+              ),
+          ],
+        ),
+      );
+    });
+  }
+}
+
+class _ReviewLine extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _ReviewLine({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 92,
+            child: Text(
+              label,
+              style: const TextStyle(
+                color: Color(0xFF6B7280),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value.isEmpty ? '-' : value,
+              style: const TextStyle(
+                color: Color(0xFF1A1A1A),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Card extends StatelessWidget {
   final String title;
   final IconData icon;
@@ -1842,6 +2389,73 @@ class _Field extends StatelessWidget {
               ),
               const SizedBox(width: 14),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CompactField extends StatelessWidget {
+  final String label;
+  final TextEditingController ctrl;
+  final String hint;
+  final TextInputType? keyboardType;
+
+  const _CompactField({
+    required this.label,
+    required this.ctrl,
+    required this.hint,
+    this.keyboardType,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF6B7280),
+          ),
+        ),
+        const SizedBox(height: 5),
+        SizedBox(
+          height: 42,
+          child: TextField(
+            controller: ctrl,
+            keyboardType: keyboardType,
+            style: const TextStyle(
+              color: Color(0xFF1A1A1A),
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: const TextStyle(
+                color: Color(0xFF9CA3AF),
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+              ),
+              filled: true,
+              fillColor: const Color(0xFFF9FAF7),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFFE5E0D8)),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFFE5E0D8)),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(10),
+                borderSide: const BorderSide(color: Color(0xFF006F39)),
+              ),
+            ),
           ),
         ),
       ],

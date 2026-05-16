@@ -43,7 +43,7 @@ class TerrainListScreen extends GetView<TerrainController> {
             ),
             centerTitle: true,
             title: const Text(
-              'Mes Parcelles',
+              'Mes complexes',
               style: TextStyle(
                 fontFamily: 'Orbitron',
                 fontSize: 18,
@@ -54,16 +54,22 @@ class TerrainListScreen extends GetView<TerrainController> {
           ),
         ).animate().fadeIn(duration: 400.ms),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => controller.goToForm(null),
-        backgroundColor: const Color(0xFF006F39),
-        elevation: 8,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: const Icon(
-          PhosphorIconsLight.plusCircle,
-          color: Colors.white,
-          size: 28,
-        ),
+      floatingActionButton: Obx(
+        () => controller.totalTerrains == 0
+            ? const SizedBox.shrink()
+            : FloatingActionButton(
+                onPressed: () => controller.goToForm(null),
+                backgroundColor: const Color(0xFF006F39),
+                elevation: 8,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Icon(
+                  PhosphorIconsLight.plusCircle,
+                  color: Colors.white,
+                  size: 28,
+                ),
+              ),
       ),
       body: Container(
         color: const Color(0xFFF5F0E8),
@@ -78,7 +84,7 @@ class TerrainListScreen extends GetView<TerrainController> {
                       children: [
                         Expanded(
                           child: _StatPill(
-                            label: 'Parcelles',
+                            label: 'Complexes',
                             value: '${controller.totalTerrains}',
                             icon: PhosphorIconsLight.soccerBall,
                             color: const Color(0xFF006F39),
@@ -96,8 +102,8 @@ class TerrainListScreen extends GetView<TerrainController> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: _StatPill(
-                            label: 'Mini-terrains',
-                            value: '${controller.totalMiniTerrains}',
+                            label: 'Terrains',
+                            value: '${controller.totalPhysicalTerrains}',
                             icon: PhosphorIconsLight.gridFour,
                             color: const Color(0xFFB7791F),
                           ),
@@ -138,7 +144,7 @@ class TerrainListScreen extends GetView<TerrainController> {
                               fontWeight: FontWeight.w500,
                             ),
                             decoration: const InputDecoration(
-                              hintText: 'Rechercher une parcelle...',
+                              hintText: 'Rechercher un complexe...',
                               hintStyle: TextStyle(
                                 color: Color(0xFF9CA3AF),
                                 fontSize: 14,
@@ -202,34 +208,35 @@ class TerrainListScreen extends GetView<TerrainController> {
 
   Widget _buildFilterBar() {
     return Obx(
-      () => SizedBox(
-        height: 38,
-        child: ListView(
-          scrollDirection: Axis.horizontal,
-          physics: const BouncingScrollPhysics(),
-          children: [
-            _FilterChip(
+      () => Row(
+        children: [
+          Expanded(
+            child: _FilterChip(
               label: 'Tous',
               count: controller.totalTerrains,
               selected: controller.statusFilter.value == 'all',
               onTap: () => controller.selectStatusFilter('all'),
             ),
-            const SizedBox(width: 8),
-            _FilterChip(
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _FilterChip(
               label: 'Actifs',
               count: controller.activeTerrains,
               selected: controller.statusFilter.value == 'active',
               onTap: () => controller.selectStatusFilter('active'),
             ),
-            const SizedBox(width: 8),
-            _FilterChip(
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: _FilterChip(
               label: 'Inactifs',
               count: controller.inactiveTerrains,
               selected: controller.statusFilter.value == 'inactive',
               onTap: () => controller.selectStatusFilter('inactive'),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -250,7 +257,7 @@ class TerrainListScreen extends GetView<TerrainController> {
             ),
             const SizedBox(height: 20),
             Text(
-              hasAnyTerrain ? 'Aucun résultat' : 'Aucune parcelle',
+              hasAnyTerrain ? 'Aucun résultat' : 'Aucun complexe',
               style: const TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.w700,
@@ -261,7 +268,7 @@ class TerrainListScreen extends GetView<TerrainController> {
             Text(
               hasAnyTerrain
                   ? 'Essayez une autre recherche\nou un autre filtre.'
-                  : 'Ajoutez votre première parcelle\npour commencer.',
+                  : 'Ajoutez votre premier complexe\npour commencer.',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 fontSize: 14,
@@ -274,7 +281,7 @@ class TerrainListScreen extends GetView<TerrainController> {
               ElevatedButton.icon(
                 onPressed: () => controller.goToForm(null),
                 icon: const Icon(PhosphorIconsLight.plus, size: 18),
-                label: const Text('Ajouter une parcelle'),
+                label: const Text('Ajouter un complexe'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF006F39),
                   foregroundColor: Colors.white,
@@ -389,6 +396,8 @@ class _FilterChip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: 180.ms,
+        height: 38,
+        alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
           color: selected ? const Color(0xFF006F39) : Colors.white,
@@ -601,12 +610,16 @@ class _TerrainCard extends StatelessWidget {
                             runSpacing: 8,
                             children: [
                               _InfoBadge(
-                                label: terrain.miniTerrainLabel,
+                                label: terrain.physicalTerrainLabel,
                                 icon: PhosphorIconsLight.gridFour,
                               ),
                               _InfoBadge(
-                                label: terrain.parcelleStatusLabel,
+                                label: terrain.complexeStatusLabel,
                                 icon: PhosphorIconsLight.checkCircle,
+                              ),
+                              _InfoBadge(
+                                label: terrain.reservableUnitLabel,
+                                icon: PhosphorIconsLight.gridFour,
                               ),
                               _InfoBadge(
                                 label: terrain.displaySurface,

@@ -102,7 +102,7 @@ class AvailabilityController extends GetxController {
           options.add(
             TerrainOption(
               id: terrainId,
-              name: '$terrainName · Toute la parcelle',
+              name: '$terrainName · Tout le complexe',
               parentName: terrainName,
             ),
           );

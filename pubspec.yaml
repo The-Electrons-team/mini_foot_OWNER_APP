@@ -58,6 +58,3 @@ flutter:
     - family: Orbitron
       fonts:
         - asset: assets/fonts/Orbitron-Variable.ttf
-    - family: DMSans
-      fonts:
-        - asset: assets/fonts/DMSans-Variable.ttf
