@@ -108,7 +108,7 @@ class _ReservationDetailScreenState extends State<ReservationDetailScreen> {
         backgroundColor: kBg,
         elevation: 0,
         leading: IconButton(
-          onPressed: Get.back,
+          onPressed: () => Get.back(),
           icon: const Icon(
             Icons.arrow_back_ios_new_rounded,
             size: 18,

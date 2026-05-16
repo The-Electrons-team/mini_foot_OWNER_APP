@@ -410,6 +410,28 @@ class AuthService {
     }
   }
 
+  Future<Map<String, dynamic>> forceChangePassword({
+    required String token,
+    required String newPassword,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$_baseUrl/auth/change-password'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        'password': newPassword,
+      }),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return jsonDecode(response.body);
+    } else {
+      throw Exception('Erreur mot de passe: ${response.body}');
+    }
+  }
+
   Map<String, dynamic> _normalizeUser(dynamic value) {
     final user = Map<String, dynamic>.from(value as Map);
     user['avatarUrl'] = _normalizeStorageUrl(user['avatarUrl']);

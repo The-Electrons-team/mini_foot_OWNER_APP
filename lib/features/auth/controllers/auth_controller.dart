@@ -25,6 +25,10 @@ class AuthController extends GetxController {
   void goToLogin() => Get.back();
   void goToPostAuthDestination() {
     final current = user.value;
+    if (current?.mustChangePassword == true) {
+      Get.offAllNamed(Routes.changePassword);
+      return;
+    }
     if (current?.isOwner == true && current?.isOwnerApproved != true) {
       Get.offAllNamed(Routes.ownerPending);
       return;
@@ -254,6 +258,57 @@ class AuthController extends GetxController {
         'Impossible d’envoyer les documents de vérification',
         snackPosition: SnackPosition.TOP,
       );
+      rethrow;
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
+  Future<void> changePassword(String newPassword) async {
+    final currentToken = token.value;
+    if (currentToken == null) throw Exception('SESSION_EXPIREE');
+
+    isLoading.value = true;
+    try {
+      await _authService.forceChangePassword(
+        token: currentToken,
+        newPassword: newPassword,
+      );
+
+      // Update local user state
+      if (user.value != null) {
+        user.value = UserModel(
+          id: user.value!.id,
+          phone: user.value!.phone,
+          firstName: user.value!.firstName,
+          lastName: user.value!.lastName,
+          birthDate: user.value!.birthDate,
+          avatarUrl: user.value!.avatarUrl,
+          cniNumber: user.value!.cniNumber,
+          cniFrontUrl: user.value!.cniFrontUrl,
+          cniBackUrl: user.value!.cniBackUrl,
+          ownerStatus: user.value!.ownerStatus,
+          ownerRejectionReason: user.value!.ownerRejectionReason,
+          createdAt: user.value!.createdAt,
+          position: user.value!.position,
+          payoutWavePhone: user.value!.payoutWavePhone,
+          payoutOrangePhone: user.value!.payoutOrangePhone,
+          payoutFreePhone: user.value!.payoutFreePhone,
+          preferredPayoutMethod: user.value!.preferredPayoutMethod,
+          role: user.value!.role,
+          mustChangePassword: false,
+        );
+      }
+
+      Get.snackbar(
+        'Succès',
+        'Mot de passe mis à jour avec succès',
+        snackPosition: SnackPosition.TOP,
+      );
+
+      goToPostAuthDestination();
+    } catch (e) {
+      Get.snackbar('Erreur', 'Impossible de changer le mot de passe');
       rethrow;
     } finally {
       isLoading.value = false;

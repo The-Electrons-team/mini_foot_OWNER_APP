@@ -17,6 +17,7 @@ class UserModel {
   final String? payoutFreePhone;
   final String? preferredPayoutMethod;
   final String role;
+  final bool mustChangePassword;
 
   UserModel({
     required this.id,
@@ -37,6 +38,7 @@ class UserModel {
     this.payoutFreePhone,
     this.preferredPayoutMethod,
     required this.role,
+    this.mustChangePassword = false,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -59,6 +61,7 @@ class UserModel {
       payoutFreePhone: json['payoutFreePhone'],
       preferredPayoutMethod: json['preferredPayoutMethod'],
       role: (json['role'] ?? json['role_name'] ?? '').toString().trim(),
+      mustChangePassword: json['mustChangePassword'] ?? json['must_change_password'] ?? false,
     );
   }
 
@@ -82,6 +85,7 @@ class UserModel {
       'payoutFreePhone': payoutFreePhone,
       'preferredPayoutMethod': preferredPayoutMethod,
       'role': role,
+      'mustChangePassword': mustChangePassword,
     };
   }
 

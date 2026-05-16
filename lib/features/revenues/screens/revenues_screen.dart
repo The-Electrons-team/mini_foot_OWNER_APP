@@ -48,7 +48,7 @@ class RevenuesScreen extends GetView<RevenuesController> {
       backgroundColor: kBgCard,
       elevation: 0,
       leading: IconButton(
-        onPressed: Get.back,
+        onPressed: () => Get.back(),
         icon: const Icon(
           Icons.arrow_back_ios_new_rounded,
           color: kTextPrim,

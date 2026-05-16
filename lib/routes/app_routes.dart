@@ -7,6 +7,7 @@ import '../features/auth/screens/login_screen.dart';
 import '../features/auth/screens/register_screen.dart';
 import '../features/auth/screens/otp_screen.dart';
 import '../features/auth/screens/owner_pending_screen.dart';
+import '../features/auth/screens/change_password_screen.dart';
 import '../features/dashboard/bindings/dashboard_binding.dart';
 import '../features/dashboard/screens/dashboard_screen.dart';
 import '../features/terrain/bindings/terrain_binding.dart';
@@ -63,6 +64,7 @@ abstract class Routes {
   static const qrCheckIn = '/qr-check-in';
   static const controllers = '/controllers';
   static const controllerDetail = '/controllers/detail';
+  static const changePassword = '/auth/change-password';
 }
 
 final appPages = [
@@ -244,6 +246,13 @@ final appPages = [
     middlewares: [_OwnerOnlyMiddleware()],
     transition: Transition.cupertino,
     transitionDuration: const Duration(milliseconds: 300),
+  ),
+  GetPage(
+    name: Routes.changePassword,
+    page: () => const ForceChangePasswordScreen(),
+    binding: AuthBinding(),
+    transition: Transition.fadeIn,
+    transitionDuration: const Duration(milliseconds: 350),
   ),
 ];
 

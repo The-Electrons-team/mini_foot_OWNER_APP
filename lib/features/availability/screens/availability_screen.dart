@@ -99,7 +99,7 @@ class AvailabilityScreen extends GetView<AvailabilityController> {
         children: [
           // Bouton retour
           IconButton(
-            onPressed: Get.back,
+            onPressed: () => Get.back(),
             icon: const Icon(
               Icons.arrow_back_ios_new_rounded,
               color: kTextPrim,
@@ -1566,7 +1566,7 @@ class _BulkActionSheet extends StatelessWidget {
                 width: double.infinity,
                 height: 52,
                 child: OutlinedButton(
-                  onPressed: Get.back,
+                  onPressed: () => Get.back(),
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: kBorder),
                     shape: RoundedRectangleBorder(
